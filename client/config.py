@@ -22,7 +22,7 @@ _EXAMPLE_PATH = Path(__file__).with_name("config.example.toml")
 class Config:
     server_base: str
     token: str
-    request_timeout: float = 30.0
+    request_timeout: float = 120.0  # a batched multi-action decision can take ~50s on the gateway
     max_steps: int = 12
 
 
@@ -49,6 +49,6 @@ def load_config() -> Config:
     return Config(
         server_base=server_base,
         token=token,
-        request_timeout=float(data.get("REQUEST_TIMEOUT", 30.0)),
+        request_timeout=float(data.get("REQUEST_TIMEOUT", 120.0)),
         max_steps=int(data.get("MAX_STEPS", 12)),
     )

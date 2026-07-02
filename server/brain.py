@@ -126,12 +126,13 @@ def _build_messages(command: str, ui_tree: str, state: dict | None, screenshot: 
 def _create_completion(client: OpenAI, model: str, messages: list[dict]):
     """Call the provider, degrading gracefully if an optional param is rejected.
 
-    Prefer JSON mode + thinking-off (lowest latency); fall back progressively.
+    Prefer JSON mode (forces a parseable object, and it is the faster path on this
+    gateway); fall back to an unconstrained call if the endpoint rejects it. No
+    thinking toggle: measured latency is throughput-bound, not reasoning-bound, and
+    forcing thinking on this model returns empty content.
     """
     attempts = [
-        {"response_format": {"type": "json_object"},
-         "extra_body": {"chat_template_kwargs": {"thinking": False}}},
-        {"extra_body": {"chat_template_kwargs": {"thinking": False}}},
+        {"response_format": {"type": "json_object"}},
         {},
     ]
     last_err: Exception | None = None
@@ -141,9 +142,9 @@ def _create_completion(client: OpenAI, model: str, messages: list[dict]):
                 model=model, messages=messages, temperature=0.2, max_tokens=1024, **extra,
             )
         except BadRequestError as e:
-            # Most likely an unsupported optional param (response_format / thinking
-            # toggle) — drop it and retry. Auth / rate-limit / network errors are NOT
-            # caught here: they propagate immediately instead of being retried pointlessly.
+            # Most likely an unsupported optional param (response_format) — drop it and
+            # retry unconstrained. Auth / rate-limit / network errors are NOT caught here:
+            # they propagate immediately instead of being retried pointlessly.
             last_err = e
     raise RuntimeError(f"brain: LLM call failed after parameter fallbacks: {last_err}")
 
