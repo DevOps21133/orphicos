@@ -1,4 +1,4 @@
-# CLAUDE.md — OrphicOS Build Instructions (LOCAL-ONLY EDITION)
+# CLAUDE.md — OrphicOS Build Instructions (SERVER-BRAIN EDITION)
 
 You are Claude Code, acting as the lead build engineer for **OrphicOS**.
 Read this entire file before doing anything. These are your standing orders for every session in this repo.
@@ -7,41 +7,41 @@ Read this entire file before doing anything. These are your standing orders for 
 
 ## 1. MISSION
 
-**OrphicOS** is a proprietary AI operator for **Windows**. It receives a command by **text or voice** and fully operates the machine — native apps, windows, files, mouse, keyboard. Windows-first. Not browser-only. Not Linux-focused.
+**OrphicOS** is a proprietary AI operator for **Windows**. A user installs a lightweight app on their Windows machine, gives a command by **text or voice**, and OrphicOS fully operates the machine — native apps, windows, files, mouse, keyboard. Windows-first. Not browser-only. Not Linux-focused.
 
-**OrphicOS is AUTARK.** It runs 100% on local hardware. No cloud LLM. No API keys. No per-token billing. No user data, screenshots, or commands ever leave the machine. The ONLY permitted network activity is the one-time download of model weights and open-source dependencies.
+**Architecture in one line:** a thin Windows client on the user's machine captures screen + executes actions; the reasoning ("what to click next") is done by a **server-side brain** we host. The user experiences "an AI that runs my computer." They never need to know, see, or configure the brain.
 
 Tagline (informs all UI copy): **"OrphicOS — the machine works. You don't."**
 
-Architecture:
 ```
-[ Voice (push-to-talk, LOCAL STT) ]──┐
-                                     ├──> [ OrphicOS Shell (command bar + live log + kill switch) ]
-[ Text (command bar) ]───────────────┘                     │
-                                                           v
-                                        [ Engine: Microsoft UFO² (vendored, unmodified) ]
-                                                           │
-                                        [ Brain: LOCAL UI-TARS on RTX 5090 @ localhost ]
-                                                           │
-                                        [ Windows desktop: apps, files, UI Automation ]
+USER'S WINDOWS MACHINE                        OUR SERVER
+┌─────────────────────────────┐              ┌──────────────────────────────┐
+│ OrphicOS Client             │              │ OrphicOS Brain Service        │
+│  • command bar (text/voice) │  screenshot  │  • receives screen + goal     │
+│  • screen capture           │─────────────▶│  • calls the reasoning model  │
+│  • action executor (UFO²)   │◀─────────────│  • returns next action(s)     │
+│  • live log + kill switch   │   action     │  • zero-retention of screens  │
+└─────────────────────────────┘   (HTTPS)    └──────────────────────────────┘
 ```
 
-Host machine: Windows 11, Intel Core Ultra 9 285K, RTX 5090 (32GB VRAM), 128GB RAM. Shell commands are **PowerShell** unless stated otherwise.
+Test/dev host: Windows 11, Intel Core Ultra 9 285K, RTX 5090, 128GB RAM. Shell commands are **PowerShell** on the client side; the brain service may run on Linux/WSL2/Docker or a VPS.
 
 ---
 
 ## 2. NON-NEGOTIABLE RULES
 
-1. **THE AUTARK RULE (supreme).** No cloud LLM providers. Never add, request, configure, or reference `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or any hosted-inference credential anywhere in this repo — not in code, config, `.env`, docs, or examples. All inference points at `http://localhost:<port>`. If a task appears to require a cloud model, STOP and report — do not work around this rule.
-2. **NEVER fork or modify the UFO² engine source.** Clone it into `./engine/UFO` and treat it as a read-only vendored dependency. All OrphicOS logic lives in OUR code (`./orphicos/`), which wraps and calls the engine. Configuration-only integration. We ride upstream; we do not maintain a fork.
-3. **STOP POINTS.** You prepare; the human pilots. NEVER autonomously run a UFO GUI task that controls the live desktop. When a phase reaches "run the agent on the desktop," print a checklist + the exact command for the human to run, then stop.
-4. **No destructive actions** outside the repo and the staging folder `C:\OrphicDemo\`. No registry edits, no system settings changes, no deleting files outside those paths.
-5. **License hygiene.** Only MIT / Apache-2.0 / BSD / CC-BY dependencies and model weights. NEVER add anything AGPL, SSPL, or BSL (e.g., do NOT use Open Interpreter). Maintain `THIRD-PARTY-NOTICES.txt` — every dependency or model added gets its license recorded there in the same commit.
-6. **Branding.** The product is **OrphicOS** — that name only in all UI, window titles, logs shown to users, and docs. Never surface "UFO", "Microsoft", "UI-TARS", "ByteDance", or model names in any user-facing string. (They remain, correctly, in THIRD-PARTY-NOTICES.txt and code comments.)
-7. **Git discipline.** Small commits, imperative messages ("Add kill-switch hotkey listener"), one logical change per commit. Commit after every green milestone so any failure rolls back cheap.
-8. **Windows realities.** Target Python 3.10–3.12. Mind per-monitor DPI (assume 100% scaling). Paths use `C:\` style in docs, `pathlib` in code. Test commands in PowerShell syntax. Model serving may live in WSL2/Docker; the engine and shell run on native Windows.
-9. **When blocked, do not improvise around a wall.** Print: what you tried, the exact error, your best hypothesis, and 2–3 options. Then stop and ask.
-10. **Definition of done is per phase, below.** Do not start phase N+1 until phase N's DONE checklist passes and is committed.
+1. **BRAND ABSTRACTION (supreme).** The reasoning provider is an internal implementation detail. It is NEVER named or exposed in any user-facing string, UI, log shown to the user, network hostname the user would inspect, error message, or marketing copy. All product surfaces say "OrphicOS" / "the OrphicOS engine." The provider name lives ONLY in server-side code, server env vars, and `THIRD-PARTY-NOTICES.txt`. The client app contains NO provider SDK, NO provider key, and NO provider hostname — it only ever talks to `BRAIN_BASE` (our own domain, e.g. `https://brain.orphicos.ai`).
+2. **HONEST DATA CLAIM.** Screenshots of the user's desktop travel to our server for reasoning. Therefore: never write, imply, or ship copy that says "runs locally," "never leaves your machine," "fully offline," or "0 bytes to the cloud." The approved framing everywhere (site, app, README, videos) is: **"Processed securely on OrphicOS servers. Encrypted in transit. Screens are never stored."** Build the product so that last clause is TRUE (see Rule 3).
+3. **ZERO-RETENTION BY DESIGN.** The brain service must NOT persist user screenshots to disk or logs. Hold in memory for the single inference call, then drop. Server logs may keep metadata (timestamps, action types, latency) but never the screen images or extracted screen text. This is a build requirement, not a nice-to-have — our one honest promise depends on it.
+4. **SECRETS DISCIPLINE.** The provider API key lives ONLY in the server's environment (`.env` on the server, gitignored) — NEVER in the client, NEVER in the repo, NEVER in any file shipped to a user. If you find a provider key anywhere client-side or committed, STOP and flag it.
+5. **NEVER fork or modify the UFO² engine source.** Clone into `./engine/UFO`, treat as read-only vendored dependency. All OrphicOS logic lives in our code. Configuration-only integration. Ride upstream; don't maintain a fork.
+6. **STOP POINTS.** You prepare; the human pilots. NEVER autonomously run a UFO GUI task that controls the live desktop. When a phase reaches "run the agent on the desktop," print a checklist + the exact command for the human to run, then stop.
+7. **No destructive actions** outside the repo and the staging folder `C:\OrphicDemo\`. No registry edits, no system settings changes, no deleting files outside those paths.
+8. **License hygiene.** Only MIT / Apache-2.0 / BSD / CC-BY dependencies. NEVER AGPL/SSPL/BSL (e.g., no Open Interpreter). Maintain `THIRD-PARTY-NOTICES.txt`; every dependency added is recorded in the same commit.
+9. **Git discipline.** Small commits, imperative messages, one logical change each. Commit after every green milestone.
+10. **Windows realities (client).** Target Python 3.10–3.12. Assume 100% display scaling. `pathlib` in code, `C:\` in docs, PowerShell for client commands.
+11. **When blocked, don't improvise around a wall.** Print what you tried, the exact error, your hypothesis, 2–3 options. Then stop and ask.
+12. **Definition of done is per phase.** Don't start phase N+1 until phase N's DONE checklist passes and is committed.
 
 ---
 
@@ -49,138 +49,129 @@ Host machine: Windows 11, Intel Core Ultra 9 285K, RTX 5090 (32GB VRAM), 128GB R
 
 ```
 orphicos/
-├── CLAUDE.md                  <- this file
-├── .env                       <- local settings only (gitignored)
-├── .env.example               <- LOCAL_MODEL_BASE=http://localhost:8000/v1  (NO cloud keys, ever)
-├── .gitignore                 <- includes .env, engine/UFO/logs, models/, __pycache__, *.log
+├── CLAUDE.md
+├── .gitignore                 <- .env, **/.env, engine/UFO/logs, __pycache__, *.log
 ├── THIRD-PARTY-NOTICES.txt
 ├── engine/
 │   └── UFO/                   <- vendored clone of microsoft/UFO (read-only)
-├── brain/
-│   ├── serve_model.md         <- how the local model server is launched (living doc)
-│   └── scripts/               <- WSL2/Docker launch scripts for the model server
-├── orphicos/
-│   ├── shell/                 <- FastAPI app: command bar, live log stream, replay
-│   ├── voice/                 <- push-to-talk capture + LOCAL STT
+├── server/                    <- THE BRAIN (hosted by us; never shipped to users)
+│   ├── app.py                 <- FastAPI: POST /think {screenshot, goal, state} -> {actions}
+│   ├── provider.py            <- the reasoning-model call (the ONLY place the provider is named)
+│   ├── .env.example           <- BRAIN_PROVIDER_KEY=  (server-only; real .env gitignored)
+│   └── scripts/               <- run/deploy the brain service
+├── client/                    <- THE APP (installed on the user's Windows machine)
+│   ├── shell/                 <- command bar UI + live log + kill switch (FastAPI+webview or tray)
+│   ├── voice/                 <- push-to-talk capture + STT
+│   ├── bridge/                <- runs UFO²; sends screen+goal to BRAIN_BASE; applies returned actions
 │   ├── guard/                 <- kill switch, approval gate
-│   └── bridge/                <- launches/monitors UFO sessions, parses its logs
+│   └── config.example.toml    <- BRAIN_BASE=https://brain.orphicos.ai   (NO keys here, ever)
 ├── demo/
-│   └── make_invoices.py       <- generates dummy PDFs into C:\OrphicDemo\invoices
-├── scripts/                   <- setup + run helpers (PowerShell)
+│   └── make_invoices.py
+├── scripts/                   <- setup helpers
 └── docs/
-    └── runbook.md             <- the full OrphicOS Windows Runbook (reference)
+    └── runbook.md
 ```
 
----
-
-## 4. PHASE 0 — ENVIRONMENT (do first, every fresh machine)
-
-Tasks:
-1. Verify: `python --version` (3.10–3.12), `git --version`, `nvidia-smi` (RTX 5090 visible, CUDA 12.x).
-2. Verify a Linux-container path for model serving exists: `wsl --status` (WSL2) OR `docker --version` with GPU support (`docker run --gpus all` capable). Report which is available; prefer whichever is already installed.
-3. Create the repo layout above, `.gitignore`, `.env.example` (`LOCAL_MODEL_BASE=http://localhost:8000/v1` — nothing else), initial commit.
-4. Create `THIRD-PARTY-NOTICES.txt` seeded with: Microsoft UFO (MIT, full license text), UI-TARS (Apache-2.0 code; weights per Hugging Face model card), and a placeholder for the chosen STT model.
-5. Write `scripts/check_env.ps1` that re-runs all checks — including a ping to `LOCAL_MODEL_BASE` (expected to FAIL until Phase 1) — and prints PASS/FAIL per item.
-
-**DONE when:** all checks except the model endpoint print PASS; repo committed.
+**The golden separation:** `server/` is ours and holds the key + provider name. `client/` is what the user gets and knows only its own brand + the `BRAIN_BASE` URL. Keep that wall clean in every commit.
 
 ---
 
-## 5. PHASE 1 — THE LOCAL BRAIN (the moat gets poured FIRST)
+## 4. PHASE 0 — ENVIRONMENT & SKELETON (do first)
 
-Goal: **UI-TARS-1.5-7B serving an OpenAI-compatible endpoint on localhost, powered by the RTX 5090.** This is the hardest phase and it is deliberately first — everything else stacks on top of it.
+1. Verify: `python --version` (3.10–3.12), `git --version`.
+2. Create the repo layout, `.gitignore` (must ignore every `.env`), initial commit.
+3. Create `THIRD-PARTY-NOTICES.txt` seeded with Microsoft UFO (MIT, full text) + placeholder for the reasoning provider.
+4. Create `client/config.example.toml` (`BRAIN_BASE=` only) and `server/.env.example` (`BRAIN_PROVIDER_KEY=` only). Confirm no real secrets anywhere.
+5. `scripts/check_env.ps1` prints PASS/FAIL per check.
 
-Tasks:
-1. Pick the serving path pragmatically and document the decision in `brain/serve_model.md`:
-   - **Path A (preferred): vLLM in WSL2 or Docker** with GPU passthrough, serving `ByteDance-Seed/UI-TARS-1.5-7B` (or its quantized build), exposing `http://localhost:8000/v1`.
-   - **Path B (fallback): llama.cpp / LM Studio** serving the UI-TARS-1.5-7B **GGUF** build with its mmproj vision file, OpenAI-compatible server mode. Simpler on Windows; use if Path A fights back for more than one working session.
-2. Write launch scripts into `brain/scripts/` (one command to bring the brain up; one to health-check it).
-3. Smoke-test the endpoint: a curl request with a test image + prompt returns a coherent grounding-style response. Save the exact request/response pair in `brain/serve_model.md`.
-4. VRAM budget note: record model VRAM usage from `nvidia-smi` — the 5090's 32GB must also survive Phase 5.5's STT model living alongside it.
-5. Record model + license in `THIRD-PARTY-NOTICES.txt`.
-
-**DONE when:** `scripts/check_env.ps1` model-endpoint check prints PASS; smoke test documented; committed.
+**DONE:** checks PASS; wall between `client/` and `server/` exists; committed.
 
 ---
 
-## 6. PHASE 2 — ENGINE ONLINE (text input → Windows operated, locally)
+## 5. PHASE 1 — THE BRAIN SERVICE (fastest path to "it thinks")
 
-Tasks:
-1. Clone the engine: `git clone https://github.com/microsoft/UFO.git engine/UFO` (add `engine/UFO` to `.gitignore`; record the pinned commit hash in `docs/engine-version.txt`).
-2. `pip install -r engine/UFO/requirements.txt` into a venv at `./.venv`. Log any failed packages and resolve one by one (report if blocked).
-3. Copy `engine/UFO/config/ufo/agents.yaml.template` → `agents.yaml`. Configure HOST/APP agents with `API_TYPE: "openai"`-compatible settings pointing at `LOCAL_MODEL_BASE` from `.env`. **Read the engine's local-model / Model Configuration docs FIRST** (microsoft.github.io/UFO) — do not guess field names, and note their guidance for non-GPT models (prompt/output format expectations). Config-only adaptation; if engine-source changes seem required, invoke Rule 9.
-4. Write `scripts/run_task.ps1` — health-checks the brain endpoint, activates venv, loads `.env`, launches `python -m ufo --task <name>`.
-5. **STOP POINT.** Print for the human: the 3 warm-up tasks to run manually, in order:
+Goal: a hosted endpoint that, given a screenshot + a goal + prior state, returns the next GUI action(s). Build it FIRST — it's the whole product's cortex and the fastest thing to stand up.
+
+1. `server/app.py` — FastAPI with `POST /think`: accepts `{screenshot(base64), goal, state}`, returns structured `{actions: [...], reasoning_summary}`. Enforce Rule 3: never write the screenshot to disk/log.
+2. `server/provider.py` — the single module that calls the reasoning model (vision-capable). Reads `BRAIN_PROVIDER_KEY` from server env. This is the ONE file that knows what the brain really is. Keep the interface generic: `think(screenshot, goal, state) -> actions` so the provider is swappable later.
+3. Run locally first (`http://localhost:8000`), then document deploy to a real host (VPS/your 5090 box exposed via HTTPS) in `server/scripts/deploy.md`. Put it behind TLS + a simple client auth token (per-user, so you can meter/revoke) — the token is issued by us, not a provider key.
+4. Smoke test: curl a sample screenshot + "open Notepad" → returns a coherent action. Save request/response (screenshot omitted from any saved artifact) in `docs/brain-smoketest.md`.
+
+**DONE:** `/think` returns valid actions for 3 sample screens; zero-retention verified (grep server for any screenshot write → none); committed.
+
+---
+
+## 6. PHASE 2 — CLIENT ↔ BRAIN LOOP (text in → Windows operated)
+
+1. Clone engine: `git clone https://github.com/microsoft/UFO.git engine/UFO` (gitignore it; pin commit in `docs/engine-version.txt`).
+2. `pip install -r engine/UFO/requirements.txt` into `./.venv`; resolve failures one by one.
+3. Configure UFO so its "reasoning" step calls **our** brain instead of any provider directly: point its model/endpoint config at `BRAIN_BASE` from `client/config.toml`, using its OpenAI-compatible option. **Read UFO's Model Configuration docs FIRST** (microsoft.github.io/UFO); do not guess field names. Config-only — if engine-source edits seem required, invoke Rule 11. The client must contain NO provider key or SDK — it authenticates to OUR server with the client token only.
+4. `scripts/run_task.ps1` — health-check `BRAIN_BASE`, activate venv, launch `python -m ufo --task <name>`.
+5. **STOP POINT.** Human runs 3 warm-ups (with target app open):
    - "Open Notepad and write a haiku about machines doing the work."
    - "Create a folder named test_orphic on the desktop and rename it to orphic_lives."
-   - "Open Excel, put the numbers 1 to 5 in column A, and sum them in A6."
-   Include: where UFO's session logs/screenshots land, and what a successful log looks like.
-6. After each human-piloted attempt, analyze the session logs. Expect grounding/format friction on a local model — iterate on config and task phrasing, log findings in `docs/local-brain-findings.md`. This tuning IS the product work.
+   - "Open Excel, put 1 to 5 in column A, and sum them in A6."
+   Tell the human where UFO logs land and what success looks like.
 
-**DONE when:** human confirms 3/3 warm-up tasks succeed on the LOCAL brain; findings documented; committed.
+**DONE:** human confirms 3/3 warm-ups succeed via the hosted brain; committed.
 
 ---
 
-## 7. PHASE 3 — THE MONEY DEMO (cross-app task)
+## 7. PHASE 3 — THE MONEY DEMO (cross-app)
 
-Tasks:
-1. Write `demo/make_invoices.py`: generate 5 dummy PDF invoices (fake vendor names, big readable totals) into `C:\OrphicDemo\invoices\`. Use a permissively-licensed PDF lib (e.g., reportlab — BSD; record in NOTICES).
-2. Write the canonical demo prompt into `docs/demo-task.md`:
+1. `demo/make_invoices.py` → 5 dummy PDF invoices into `C:\OrphicDemo\invoices\` (reportlab, BSD; record in NOTICES).
+2. Canonical prompt → `docs/demo-task.md`:
    > "Go through the PDFs in C:\OrphicDemo\invoices, pull each vendor name and total into a new Excel sheet, sum the column, then write a short summary in Notepad."
-3. Add `scripts/reset_demo.ps1` — wipes and regenerates the staging folder so every take starts identical.
-4. **STOP POINT.** Human runs the demo (OBS recording, network monitor visible — the money shot is GPU screaming, network silent). Debug from session logs after each attempt; iterate. Target: **3 flawless runs in a row.**
-5. If the local 7B brain cannot complete the full demo after serious iteration: simplify the demo scope (fewer invoices, two apps instead of three) until it is bulletproof, and document the capability boundary honestly in `docs/local-brain-findings.md`. A smaller flawless demo beats a bigger flaky one. Do NOT reach for a cloud model — Rule 1.
+3. `scripts/reset_demo.ps1` regenerates the staging folder identically each take.
+4. **STOP POINT.** Human runs it (OBS rolling). Debug from UFO logs after each attempt; iterate to **3 flawless runs in a row.**
 
-**DONE when:** human confirms 3/3 clean recorded runs, fully offline-capable; final working prompt saved; committed.
-
----
-
-## 8. PHASE 4 — THE ORPHICOS SHELL (the product skin)
-
-Build a FastAPI app in `orphicos/shell/` with a minimal dark-themed web UI (plain HTML/JS or minimal framework — keep deps light):
-
-1. **Command bar:** one input — "What should the machine do?" POST → `orphicos/bridge/` which launches a UFO session with that instruction.
-2. **Live log view:** `bridge/` tails UFO's session log directory (watchdog on new entries + screenshots) and streams to the UI via WebSocket/SSE. Render as a scrolling action feed with screenshots inline. OrphicOS wordmark top-left (always in frame for clips). Status pill in the header: **"AUTARK — 0 bytes to the cloud"** fed by a lightweight check that the brain endpoint is localhost.
-3. **Kill switch:** big red STOP button + global hotkey `Ctrl+Alt+Space` (the `keyboard` package — MIT; record in NOTICES) that terminates the UFO session process tree immediately. Must work even if the UI is buried.
-4. **Approval gate:** in `guard/`, pre-flight scan of the user's instruction for risk verbs (delete, remove, send, submit, purchase, uninstall, format) → require explicit confirmation BEFORE launching. Additionally scan streamed steps for the same verbs and pause the display with an "Approve" requirement where feasible; document which variant proved possible.
-5. **Replay:** a session list page; clicking one renders its full log + screenshots as a timeline. "Show me what it did."
-6. **First-run rule:** the launch script `scripts/run_shell.ps1` brings up the brain (if down), starts the server on localhost AND opens the browser to it automatically — every build session must be demo-able on screen immediately.
-
-**DONE when:** the Phase 3 demo can be typed into the OrphicOS window, watched live, killed mid-run with the hotkey (test this), and replayed afterward. Committed.
+**DONE:** 3/3 clean recorded runs; final prompt saved; committed.
 
 ---
 
-## 9. PHASE 5 — GIVE IT EARS (voice input, local)
+## 8. PHASE 4 — THE ORPHICOS CLIENT SHELL (the product skin)
 
-Voice = a front door only. STT output lands in the SAME command bar as typed text. The engine never knows the difference. STT is LOCAL — Rule 1 applies to audio too; the microphone never feeds a cloud.
+Minimal dark-themed UI in `client/shell/`:
+1. **Command bar:** "What should the machine do?" → POSTs to `client/bridge/` → runs a UFO session driven by our brain.
+2. **Live log view:** stream UFO's session log + screenshots into a scrolling feed via WebSocket/SSE. OrphicOS wordmark top-left, always in frame for clips.
+3. **Kill switch:** big red STOP + global hotkey `Ctrl+Alt+Space` (`keyboard`, MIT) killing the session process tree instantly, even if UI is buried.
+4. **Approval gate:** `guard/` pre-flight scans the instruction for risk verbs (delete, remove, send, submit, purchase, uninstall, format) → require explicit confirm BEFORE launching; also gate mid-run where feasible; document which variant works.
+5. **First-run rule:** `scripts/run_shell.ps1` starts the client on localhost AND opens the browser automatically — every build session is instantly demo-able/recordable.
 
-1. Local STT in `orphicos/voice/`: primary = **NVIDIA Parakeet TDT** (GPU, fast, silence-robust; weights CC-BY-4.0 — record in NOTICES). If NeMo setup on native Windows proves heavy, fallback = **faster-whisper large-v3-turbo** (pip-simple; record license). Keep the interface swappable (`transcribe(audio) -> str`).
-2. VRAM coexistence: verify brain + STT fit together on the 5090 (`nvidia-smi` before/after); if tight, load STT on demand and release after transcription.
-3. Push-to-talk: hold `Ctrl+Alt+V` → record mic (`sounddevice` — MIT) → release → transcribe locally → text appears in the command bar.
-4. **Confirm gate (non-negotiable):** transcribed text is NEVER auto-submitted. It fills the input; the human reads it and presses Enter. A misheard command on a machine-controlling agent is a horror movie — we do not film horror movies by accident.
-5. Latency target: < 2s from key-release to text for a 5–10s utterance on the 5090.
-
-**DONE when:** human speaks the demo command, sees it transcribed correctly, confirms, and the run executes — all local. Committed.
-
----
-
-## 10. PHASE 6 — SHIP SUPPORT (launch assets)
-
-1. Finalize `THIRD-PARTY-NOTICES.txt` — complete, accurate, bundled by the run scripts.
-2. `README.md` (public-safe): OrphicOS branding only, install steps (including the one-time model download with size expectations), screenshots. No engine/vendor names. Lead with the promise: **no account, no API key, no cloud — it runs on YOUR machine.**
-3. `docs/launch-checklist.md`: demo recording checklist (reset_demo → network monitor open → OBS → 3 takes → the unplug-the-ethernet shot), cold-open script placeholder, landing page copy placeholder. (Video copy itself is written with the founder, not autonomously.)
-4. First-run experience spec in `docs/first-run.md`: fresh machine → launch script detects missing weights → downloads once with a clear progress bar → brain up → ready. The out-of-the-box promise, engineered.
-
-**DONE when:** a stranger with an NVIDIA GPU could clone, run the setup script, wait out one model download, and run the demo from README alone — no keys, no accounts.
+**DONE:** the Phase 3 demo runs from the OrphicOS window — typed, watched, killable (test it), replayable. Committed.
 
 ---
 
-## 11. SESSION PROTOCOL (every time you start)
+## 9. PHASE 5 — GIVE IT EARS (voice input)
 
-1. Read this file. Read `docs/runbook.md` if present.
-2. Run `scripts/check_env.ps1`. Report status — including brain endpoint up/down.
+Voice is a front door only; STT output lands in the same command bar as typed text.
+1. STT in `client/voice/`: STT may be local (privacy nicety) OR server-side — your call for speed; if server-side, Rule 2's honest-data framing covers audio too. Default recommendation: local **faster-whisper** to keep the mic off the network. Keep `transcribe(audio) -> str` swappable.
+2. Push-to-talk: hold `Ctrl+Alt+V` → record (`sounddevice`, MIT) → transcribe → text fills the command bar.
+3. **Confirm gate (non-negotiable):** transcribed text is NEVER auto-submitted — it fills the box, the human reads it, presses Enter. Misheard commands on a machine-controlling agent are horror movies; we don't film those by accident.
+4. Latency target: < 2s key-release → text for a 5–10s utterance.
+
+**DONE:** human speaks the demo command, sees correct transcription, confirms, run executes. Committed.
+
+---
+
+## 10. PHASE 6 — PACKAGE & SHIP
+
+1. Package `client/` as a Windows installer (e.g. PyInstaller + Inno Setup — permissive; record in NOTICES). The installer contains the client ONLY — never `server/`, never any provider key.
+2. Finalize `THIRD-PARTY-NOTICES.txt` (complete, bundled with the installer).
+3. `README.md` (public-safe): OrphicOS branding only; install → sign in with OrphicOS account/token → speak. Approved data framing from Rule 2. No engine/provider names.
+4. `docs/launch-checklist.md`: demo recording steps, cold-open placeholder, landing-page copy placeholder (founder writes final copy, not you).
+5. Onboarding = issue the user a client token that points them at `BRAIN_BASE`. No API keys, no provider accounts, no model setup on their end. "Install → speak" is the whole first-run.
+
+**DONE:** a stranger installs the client, signs in, and runs the demo with zero setup beyond login. Committed.
+
+---
+
+## 11. SESSION PROTOCOL (every start)
+
+1. Read this file + `docs/runbook.md` if present.
+2. Run `scripts/check_env.ps1`; report status incl. `BRAIN_BASE` reachability.
 3. State: current phase, last DONE checkpoint, today's target.
-4. Work in small commits toward the phase's DONE list.
-5. End of session: print a 5-line status (phase, done, blocked, next, any human actions needed).
+4. Small commits toward the phase DONE list. Keep the `client/` ↔ `server/` wall clean.
+5. End session: 5-line status (phase, done, blocked, next, human actions needed).
 
-No keys. No cloud. No excuses. The machine works — on its own hardware. Build accordingly.
+Invisible plumbing, honest promises. The brand is OrphicOS; the brain is ours to know. Build accordingly.
