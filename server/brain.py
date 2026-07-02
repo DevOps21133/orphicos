@@ -54,6 +54,10 @@ How to accomplish tasks:
 - Drive the GUI the way a person would. NEVER accomplish a task by typing commands into a terminal, console,
   PowerShell, or Command Prompt window, and never treat a focused terminal as a scratchpad. If a terminal is the
   active window, focus or launch the correct GUI app (e.g. File Explorer) and act there instead.
+- If a modal dialog, popup, or wizard is blocking the window you need, handle it BEFORE the task: dismiss it with
+  its Close/Cancel/OK button or press "escape". If it asks whether to discard or resume/recover earlier work, pick
+  the clean-start option (Discard/Cancel), not the one that reopens old files. Never type task data into a dialog
+  that is only in your way.
 - For file/folder operations, use File Explorer and KEYBOARD SHORTCUTS, not small ribbon/toolbar buttons (which
   often have no stable coordinates): create a folder with press "ctrl+shift+n", then type its name and press "enter";
   rename the selected item with press "f2", then type the new name and press "enter".
