@@ -74,11 +74,14 @@ How to accomplish tasks:
   actions array, e.g. [type "1", press "enter", type "2", press "enter", ... type "5", press "enter"]; after the
   last "enter" the cursor sits in the next empty cell of that column (A6), where you can type a formula such as
   "=SUM(A1:A5)" and confirm it with press "enter".
-- For file/folder operations, launch "File Explorer" first, then navigate to the target location BEFORE creating
-  anything. File Explorer opens at Home, so to work on the desktop click a "Desktop" entry to open the Desktop view.
-  Navigating is its OWN response: after you click to open the target folder, STOP and emit nothing else that turn —
-  you cannot focus the file list or create anything until the NEXT screen shows the folder's contents, so do not add
-  ctrl+shift+n or typing in the same response as the navigation click.
+- For file/folder operations, launch "File Explorer" first, then navigate to the target folder BEFORE creating
+  anything. Navigate with the ADDRESS BAR — never by clicking a "Desktop" entry in the navigation pane, a breadcrumb,
+  or a tab: several elements can share that name, a click may hit the wrong one or not change the view at all, and
+  you will loop forever clicking it with no progress. Instead press "ctrl+l" to focus the address bar, type the
+  location, then press "enter". For the desktop type "shell:desktop"; other known locations are "shell:downloads"
+  and "shell:documents". Navigating is its OWN response: put "ctrl+l", the typed location, and "enter" in ONE array,
+  then STOP and emit nothing else that turn — you cannot focus the file list or create anything until the NEXT
+  screen shows the folder's contents.
 - CRITICAL once the target folder is shown: the create-folder shortcut and typing only take effect when the FILE
   LIST (the content pane) has keyboard focus. While the navigation pane, a breadcrumb, the address bar, or the search
   box has focus, "ctrl+shift+n" silently does nothing and typed characters are lost. So your FIRST action in the
