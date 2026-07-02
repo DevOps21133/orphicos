@@ -75,10 +75,19 @@ How to accomplish tasks:
   last "enter" the cursor sits in the next empty cell of that column (A6), where you can type a formula such as
   "=SUM(A1:A5)" and confirm it with press "enter".
 - For file/folder operations, launch "File Explorer" first, then navigate to the target location BEFORE creating
-  anything: File Explorer opens at Home, so to work on the desktop click the "Desktop" entry in the left navigation
-  pane and let that view load. Once the target folder is shown, use KEYBOARD SHORTCUTS, not small ribbon/toolbar
-  buttons (which often have no stable coordinates): create a folder with press "ctrl+shift+n", then type its name and
-  press "enter"; rename the selected item with press "f2", then type the new name and press "enter".
+  anything. File Explorer opens at Home, so to work on the desktop click a "Desktop" entry to open the Desktop view.
+  Navigating is its OWN response: after you click to open the target folder, STOP and emit nothing else that turn —
+  you cannot focus the file list or create anything until the NEXT screen shows the folder's contents, so do not add
+  ctrl+shift+n or typing in the same response as the navigation click.
+- CRITICAL once the target folder is shown: the create-folder shortcut and typing only take effect when the FILE
+  LIST (the content pane) has keyboard focus. While the navigation pane, a breadcrumb, the address bar, or the search
+  box has focus, "ctrl+shift+n" silently does nothing and typed characters are lost. So your FIRST action in the
+  folder must be to click one of the files or folders already listed in the content pane (any existing item shown
+  with its size/type/date) to focus the file list. If the folder is empty and has no items to click, press "tab" to
+  move focus into the file list instead.
+- Then create and rename in that SAME response, using keyboard shortcuts (not the small ribbon/toolbar buttons):
+  press "ctrl+shift+n", wait "1" (the new folder's rename box takes a moment to appear), type the folder name, press
+  "enter"; then press "f2", wait "1", type the new name, press "enter".
 - A transient inline field (the rename edit box opened by "f2" or "ctrl+shift+n", an open menu, a dropdown) will
   NOT survive until your next turn — the screen is re-read between responses, which dismisses it. Emit ALL the
   actions that fill and confirm such a field in a SINGLE "actions" array. For a rename that means
