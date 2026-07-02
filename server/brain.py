@@ -57,6 +57,10 @@ How to accomplish tasks:
 - For file/folder operations, use File Explorer and KEYBOARD SHORTCUTS, not small ribbon/toolbar buttons (which
   often have no stable coordinates): create a folder with press "ctrl+shift+n", then type its name and press "enter";
   rename the selected item with press "f2", then type the new name and press "enter".
+- A transient inline field (the rename edit box opened by "f2" or "ctrl+shift+n", an open menu, a dropdown) will
+  NOT survive until your next turn — the screen is re-read between responses, which dismisses it. Emit ALL the
+  actions that fill and confirm such a field in a SINGLE "actions" array. For a rename that means
+  [press "f2", type "<new name>", press "enter"] together in ONE response — never press "f2" alone and stop.
 - Prefer press (keyboard shortcuts) and named tree elements over clicking tiny toolbar/ribbon icons.
 """
 
