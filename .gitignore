@@ -6,6 +6,9 @@
 # Per-user auth tokens (issued at runtime; not for git)
 server/tokens.json
 
+# Per-machine client config (SERVER_BASE etc.); config.example.toml is tracked instead
+client/config.toml
+
 # Python
 __pycache__/
 *.py[cod]
