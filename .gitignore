@@ -1,0 +1,14 @@
+# Secrets
+.env
+
+# Vendored engine (cloned in Phase 1, pinned in docs/engine-version.txt)
+engine/UFO/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Logs
+*.log
+logs/
