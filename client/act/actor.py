@@ -30,7 +30,16 @@ class Actor:
         handler = getattr(self, f"_do_{atype}", None)
         if handler is None:
             raise ActionError(f"unsupported action type: {atype!r}")
-        return handler(action, action.get("value"))
+        try:
+            return handler(action, action.get("value"))
+        except ActionError:
+            raise
+        except Exception as e:  # noqa: BLE001 — deliberate: any engine failure becomes skippable
+            # windows-use reads a control's live BoundingRectangle at act time; a control
+            # that went stale during the brain round-trip raises comtypes.COMError (not an
+            # ActionError). Convert it so the loop SKIPS this action and re-perceives,
+            # rather than crashing the whole run on a half-finished desktop.
+            raise ActionError(f"{atype} failed: {type(e).__name__}: {e}") from e
 
     # --- element resolution ------------------------------------------------
     def _resolve_loc(self, action: dict) -> tuple[int, int] | None:

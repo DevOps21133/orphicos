@@ -8,7 +8,8 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from client.loop import run_command
+from client.loop import _DECIDE_RETRIES, _EMPTY_TOLERANCE, run_command
+from client.net import BrainError
 from client.tests.fakes import FakeBrain, FakeDesktop
 
 LAUNCH = {"type": "launch", "value": "notepad"}
@@ -46,12 +47,58 @@ class ControlFlowTests(unittest.TestCase):
         self.assertEqual(outcome, "done")
         self.assertEqual(len(brain.seen), 2)
 
-    def test_no_actions_stops(self):
+    def test_repeated_empty_responses_stop(self):
+        # A single empty response is tolerated; only after _EMPTY_TOLERANCE+1 in a row do we quit.
         desktop = FakeDesktop(node_names=["Save"], active_window="Desktop")
-        brain = FakeBrain([_decision([], done=False)])
-        outcome = self._run(desktop, brain)
+        brain = FakeBrain([_decision([], done=False)])  # always empty
+        outcome = self._run(desktop, brain, max_steps=10)
         self.assertEqual(outcome, "no_actions")
-        self.assertEqual(len(brain.seen), 1)
+        self.assertEqual(len(brain.seen), _EMPTY_TOLERANCE + 1)
+
+    def test_transient_empty_response_is_tolerated(self):
+        # One empty response mid-run must NOT abort; the next non-empty step proceeds.
+        desktop = FakeDesktop(node_names=["Save"], active_window="App")
+        brain = FakeBrain([
+            _decision([], done=False),       # transient empty response
+            _decision([WAIT0], done=True),   # brain recovers
+        ])
+        outcome = self._run(desktop, brain)
+        self.assertEqual(outcome, "done")
+        self.assertEqual(len(brain.seen), 2)
+
+    def test_brain_error_stops_cleanly_after_retries(self):
+        # A persistent BrainError is retried, then the run stops with "brain_error" — no crash.
+        desktop = FakeDesktop(node_names=["Save"], active_window="App")
+        brain = FakeBrain([BrainError("brain down (502)")])  # every decide raises
+        events = []
+        outcome = self._run(desktop, brain, on_event=events.append)
+        self.assertEqual(outcome, "brain_error")
+        self.assertEqual(len(brain.seen), _DECIDE_RETRIES + 1)  # initial attempt + retries
+        self.assertEqual(events[-1]["actions"], [])
+        self.assertFalse(events[-1]["done"])
+
+    def test_transient_brain_error_then_recovers(self):
+        # A single BrainError is retried and the run continues once the brain answers.
+        desktop = FakeDesktop(node_names=["Save"], active_window="App")
+        brain = FakeBrain([
+            BrainError("transient 502"),
+            _decision([WAIT0], done=True),
+        ])
+        outcome = self._run(desktop, brain)
+        self.assertEqual(outcome, "done")
+        self.assertEqual(len(brain.seen), 2)  # failed attempt + successful retry
+
+    def test_stale_control_error_is_skipped_not_crash(self):
+        # windows-use raising a live-COM error (a control went stale) must SKIP the action,
+        # not crash the run — the loop's except ActionError relies on Actor converting it.
+        desktop = FakeDesktop(node_names=["Save"], active_window="App",
+                              raise_on_coords=RuntimeError("UIA_E_ELEMENTNOTAVAILABLE"))
+        brain = FakeBrain([_decision([{"type": "click", "target_selector": "Save"}], done=True)])
+        events = []
+        outcome = self._run(desktop, brain, on_event=events.append)
+        self.assertEqual(outcome, "done")
+        result_str = events[0]["actions"][0]["result"]
+        self.assertTrue(result_str.startswith("SKIPPED"), result_str)
 
     def test_max_steps_reached(self):
         desktop = FakeDesktop(node_names=["Save"], active_window="Loop")

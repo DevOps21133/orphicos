@@ -50,12 +50,16 @@ class FakeDesktop:
     """
 
     def __init__(self, node_names: list[str] | None = None, active_window: str | None = None,
-                 tree_status: bool = True, screenshot: bytes = b"\x89PNG-fake") -> None:
+                 tree_status: bool = True, screenshot: bytes = b"\x89PNG-fake",
+                 raise_on_coords: Exception | None = None) -> None:
         nodes = [FakeNode(n) for n in (node_names or [])]
         self._tree = FakeTreeState(nodes, status=tree_status)
         win = FakeWindow(active_window) if active_window else None
         self.desktop_state = FakeDesktopState(self._tree, win)
         self._screenshot = screenshot
+        # Set to simulate windows-use raising a live-COM error (e.g. a control that went
+        # stale between perception and action) — see FakeDesktop.get_coordinates_from_label.
+        self._raise_on_coords = raise_on_coords
         self.calls: list[tuple] = []
 
     # --- perception (used by Perceiver) ------------------------------------
@@ -68,6 +72,8 @@ class FakeDesktop:
     # --- element resolution (used by Actor) --------------------------------
     def get_coordinates_from_label(self, label: int) -> tuple[int, int]:
         self.calls.append(("get_coordinates_from_label", label))
+        if self._raise_on_coords is not None:  # mimic windows-use's live-COM failure
+            raise self._raise_on_coords
         return (100 + label, 200 + label)  # unique, deterministic per label
 
     # --- actions (used by Actor) -------------------------------------------
@@ -92,9 +98,11 @@ class FakeBrain:
     """Returns a scripted decision per decide() call; records what it was asked.
 
     Passing fewer decisions than steps repeats the last one (handy for max_steps tests).
+    A scripted entry that is an Exception instance is RAISED instead of returned, so
+    tests can exercise the loop's transient-error retry path.
     """
 
-    def __init__(self, decisions: list[dict], health_ok: bool = True) -> None:
+    def __init__(self, decisions: list, health_ok: bool = True) -> None:
         self._decisions = decisions
         self._i = 0
         self.health_ok = health_ok
@@ -108,4 +116,6 @@ class FakeBrain:
                           "state": state, "screenshot": screenshot})
         decision = self._decisions[min(self._i, len(self._decisions) - 1)]
         self._i += 1
+        if isinstance(decision, Exception):
+            raise decision
         return decision

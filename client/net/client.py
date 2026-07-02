@@ -49,7 +49,13 @@ class BrainClient:
             raise BrainError("OrphicOS token rejected (401). Check ORPHIC_TOKEN.")
         if r.status_code != 200:
             raise BrainError(f"Brain returned HTTP {r.status_code}.")
-        return r.json()
+        try:
+            data = r.json()
+        except ValueError as e:  # a 200 with a non-JSON body (e.g. a proxy error page)
+            raise BrainError("Brain returned a non-JSON response body.") from e
+        if not isinstance(data, dict):
+            raise BrainError("Brain returned an unexpected response shape.")
+        return data
 
     def close(self) -> None:
         self._client.close()

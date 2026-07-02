@@ -85,6 +85,16 @@ class ActionDispatchTests(unittest.TestCase):
         with self.assertRaises(ActionError):
             self.actor.execute({"type": "teleport"})
 
+    def test_execute_converts_foreign_exception_to_actionerror(self):
+        # A control that went stale makes windows-use raise a live-COM error; execute() must
+        # convert it to ActionError so the loop SKIPS the action instead of crashing the run.
+        desktop = FakeDesktop(node_names=["Save"],
+                              raise_on_coords=RuntimeError("UIA_E_ELEMENTNOTAVAILABLE"))
+        actor = Actor(desktop)
+        with self.assertRaises(ActionError) as ctx:
+            actor.execute({"type": "click", "target_selector": "Save"})
+        self.assertIn("click failed", str(ctx.exception))
+
     def test_click_is_single_left_click(self):
         self.actor.execute({"type": "click", "target_selector": "Save"})
         self.assertIn(("click", (100, 200), "left", 1), self.desktop.calls)

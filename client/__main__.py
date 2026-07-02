@@ -62,7 +62,9 @@ def main(argv: list[str]) -> int:
         brain.close()
 
     print(f"\nFinished ({outcome}).")
-    return 0 if outcome in ("done", "no_actions") else 1
+    # Only "done" means the command was satisfied. "no_actions"/"max_steps"/"brain_error"
+    # are unfinished commands -> nonzero, so a caller keying on exit code isn't misled.
+    return 0 if outcome == "done" else 1
 
 
 if __name__ == "__main__":
