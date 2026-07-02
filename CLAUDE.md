@@ -45,6 +45,7 @@ Dev/test host: Windows 11, Intel Core Ultra 9 285K, RTX 5090, 128GB RAM. Client 
 11. **Windows realities.** Python 3.10–3.12. Assume 100% display scaling. `pathlib` in code, `C:\` in docs, PowerShell for client commands.
 12. **When blocked, don't improvise around a wall.** Print: what you tried, the exact error, your hypothesis, 2–3 options. Then stop and ask.
 13. **DONE is per phase.** Don't start phase N+1 until phase N's DONE checklist passes and is committed.
+14. **PRODUCTION-READY ONLY — NO MOCK DATA.** Every deliverable is real, working code. No mock/fake/placeholder/dummy data, no stubbed or `pass`-only functions, no "TODO: implement later," no simulated responses standing in for real ones. Every product code path runs against the real thing: the real UIA tree, real action execution, real server calls, real screen capture. The ONLY exception is a fixture that exists purely to exercise a smoke/unit test — it must be clearly labeled as a test fixture and NEVER wired into a product path.
 
 ---
 
