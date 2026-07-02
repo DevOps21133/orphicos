@@ -90,17 +90,39 @@ if (-not (Test-Path $giPath)) {
     }
 }
 
-# --- 4a. no real .env files present (only .env.example is tracked) ---------
-# Scan the WHOLE repo (excluding .git internals) so a real .env anywhere is caught.
+# --- 4a. no .env secret is committed to git (Rule 6) -----------------------
+# A real .env MAY exist locally (server/.env holds the live key), but it must be
+# gitignored AND untracked so the key never enters the repo. A gitignored,
+# untracked server/.env is the EXPECTED, correct state -- not a failure.
 $envFiles = @(
     Get-ChildItem -Path $RepoRoot -Recurse -File -Force -Filter '.env' -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -eq '.env' -and $_.FullName -notmatch '\\\.git\\' }
 )
-if ($envFiles.Count -eq 0) {
-    Write-Check 'no real .env files' 'PASS' 'only .env.example is present'
+if (-not $gitPresent) {
+    Write-Check 'no .env secret in git' 'INFO' 'git unavailable; cannot confirm tracking'
 } else {
-    $names = ($envFiles | ForEach-Object { $_.FullName.Substring($RepoRoot.Length + 1) }) -join ', '
-    Write-Check 'no real .env files' 'FAIL' ('found: {0}' -f $names)
+    $tracked = @()   # tracked .env == secret already in the repo
+    $exposed = @()   # un-ignored .env == would be committed on next `git add`
+    foreach ($f in $envFiles) {
+        $rel = ($f.FullName.Substring($RepoRoot.Length + 1)) -replace '\\', '/'
+        & git -C $RepoRoot ls-files --error-unmatch -- $rel 2>$null | Out-Null
+        if ($LASTEXITCODE -eq 0) { $tracked += $rel }
+        & git -C $RepoRoot check-ignore --quiet -- $rel 2>$null
+        if ($LASTEXITCODE -ne 0) { $exposed += $rel }
+    }
+    if ($tracked.Count -eq 0 -and $exposed.Count -eq 0) {
+        $detail = if ($envFiles.Count -gt 0) {
+            ('{0} local .env present; gitignored & untracked (OK)' -f $envFiles.Count)
+        } else {
+            'none present'
+        }
+        Write-Check 'no .env secret in git' 'PASS' $detail
+    } else {
+        $msgs = @()
+        if ($tracked.Count -gt 0) { $msgs += ('TRACKED in git: {0}' -f ($tracked -join ', ')) }
+        if ($exposed.Count -gt 0) { $msgs += ('not gitignored: {0}' -f ($exposed -join ', ')) }
+        Write-Check 'no .env secret in git' 'FAIL' ($msgs -join '; ')
+    }
 }
 
 # --- 4b. example env carries no filled-in secret ---------------------------
