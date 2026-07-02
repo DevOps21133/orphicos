@@ -43,6 +43,39 @@ try {
     Report 'CUDA >= 12' $false 'nvidia-smi not found on PATH'
 }
 
+# Linux-container path for model serving: WSL2 preferred, Docker acceptable
+$wslOk = $false
+try {
+    $wslOut = (& wsl --status) -join ' '
+    $wslOk = ($LASTEXITCODE -eq 0) -and ($wslOut.Length -gt 0)
+} catch {}
+$dockerOk = $false
+try {
+    $null = & docker --version
+    $dockerOk = ($LASTEXITCODE -eq 0)
+} catch {}
+if ($wslOk) { $containerDetail = 'WSL2 available' } elseif ($dockerOk) { $containerDetail = 'Docker available' } else { $containerDetail = 'neither WSL2 nor Docker found' }
+Report 'WSL2/Docker' ($wslOk -or $dockerOk) $containerDetail
+
+# Brain endpoint (from .env LOCAL_MODEL_BASE; expected to FAIL until Phase 1 brings the brain up)
+$envFile = Join-Path (Split-Path $PSScriptRoot -Parent) '.env'
+$modelBase = $null
+if (Test-Path $envFile) {
+    foreach ($line in Get-Content $envFile) {
+        if ($line -match '^\s*LOCAL_MODEL_BASE\s*=\s*(.+)$') { $modelBase = $Matches[1].Trim() }
+    }
+}
+if ($modelBase) {
+    try {
+        $null = Invoke-RestMethod -Uri "$modelBase/models" -TimeoutSec 5
+        Report 'Brain endpoint' $true "$modelBase responding"
+    } catch {
+        Report 'Brain endpoint' $false "$modelBase not responding (expected until Phase 1 DONE)"
+    }
+} else {
+    Report 'Brain endpoint' $false 'LOCAL_MODEL_BASE not set in .env'
+}
+
 Write-Host ''
 if ($script:failCount -eq 0) {
     Write-Host 'All checks PASS.' -ForegroundColor Green

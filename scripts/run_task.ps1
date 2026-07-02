@@ -22,11 +22,20 @@ Get-Content $EnvFile | ForEach-Object {
     }
 }
 
-foreach ($required in 'LOCAL_MODEL_BASE', 'LOCAL_MODEL_NAME') {
-    if (-not [System.Environment]::GetEnvironmentVariable($required)) {
-        Write-Error "$required is empty - set it in .env (local model server must be running)."
-        exit 1
-    }
+if (-not $env:LOCAL_MODEL_BASE) {
+    Write-Error 'LOCAL_MODEL_BASE is empty - set it in .env.'
+    exit 1
+}
+# Brain scripts serve the model under this fixed alias; override in .env only if serving differently.
+if (-not $env:LOCAL_MODEL_NAME) { $env:LOCAL_MODEL_NAME = 'ui-tars-1.5-7b' }
+
+# Health-check the brain endpoint before launching.
+try {
+    $models = Invoke-RestMethod -Uri "$env:LOCAL_MODEL_BASE/models" -TimeoutSec 5
+    Write-Host "Brain online: $(($models.data | ForEach-Object id) -join ', ')"
+} catch {
+    Write-Error "Brain endpoint $env:LOCAL_MODEL_BASE is not responding - start it first: brain\scripts\brain_up.ps1"
+    exit 1
 }
 
 Write-Host "OrphicOS: launching task '$Task' against $env:LOCAL_MODEL_BASE ($env:LOCAL_MODEL_NAME)"

@@ -36,17 +36,28 @@ License: MIT
     SOFTWARE.
 
 -------------------------------------------------------------------------------
-2. UI-TARS (placeholder - added in Phase 4)
+2. UI-TARS-1.5-7B
 -------------------------------------------------------------------------------
 Source:  https://github.com/bytedance/UI-TARS
-Usage:   Local GUI-grounding model served beside the engine (Phase 4)
-License: Apache-2.0 (code); model weights Apache-2.0 per model card -
-         verify exact terms on the model card before Phase 4 and replace
-         this placeholder with the full license text.
+Weights: https://huggingface.co/ByteDance-Seed/UI-TARS-1.5-7B
+Usage:   The local brain - GUI-grounding model served via vLLM in WSL2
+         (Phase 1); weights downloaded once from Hugging Face, run locally.
+License: Apache-2.0 (code); model weights Apache-2.0 per the Hugging Face
+         model card - verify on first download and paste the full license
+         text here.
 
 -------------------------------------------------------------------------------
-3. Speech-to-text model (placeholder - chosen in Phase 3.5)
+3. vLLM
 -------------------------------------------------------------------------------
-Candidates: NVIDIA Parakeet TDT (primary) or faster-whisper large-v3-turbo
-            (fallback). Record the chosen model, its exact license, and the
-            full license text here in the same commit that adds it.
+Source:  https://github.com/vllm-project/vllm
+Usage:   Serves the local brain model inside WSL2 (installed in a WSL venv,
+         not redistributed).
+License: Apache-2.0
+
+-------------------------------------------------------------------------------
+4. Speech-to-text model (placeholder - chosen in Phase 5)
+-------------------------------------------------------------------------------
+Candidates: NVIDIA Parakeet TDT (primary, weights CC-BY-4.0) or
+            faster-whisper large-v3-turbo (fallback). Record the chosen
+            model, its exact license, and the full license text here in the
+            same commit that adds it.
