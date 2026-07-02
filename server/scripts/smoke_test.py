@@ -1,8 +1,8 @@
-"""Smoke-test the local brain endpoint with an image + grounding prompt.
+﻿"""Smoke-test the local brain endpoint with an image + grounding prompt.
 
 Generates a synthetic UI screenshot (a window with a Submit button), sends it
 to the OpenAI-compatible endpoint, and prints the request summary + response.
-Run with the repo venv: .venv\\Scripts\\python.exe brain\\scripts\\smoke_test.py
+Run with the repo venv: .venv\\Scripts\\python.exe server\\scripts\\smoke_test.py
 """
 
 import base64

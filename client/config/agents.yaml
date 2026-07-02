@@ -1,5 +1,5 @@
-# OrphicOS agent configuration (this file lives in the gitignored engine dir;
-# canonical copy: orphicos/config/agents.yaml — edit there, deploy via run_task.ps1)
+﻿# OrphicOS agent configuration (this file lives in the gitignored engine dir;
+# canonical copy: client/config/agents.yaml â€” edit there, deploy via run_task.ps1)
 #
 # Brain: LOCAL model server (OpenAI-compatible endpoint), fully local, no cloud APIs.
 # ${VAR} placeholders are expanded from environment variables by the engine's

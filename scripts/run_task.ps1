@@ -13,7 +13,7 @@ if (-not (Test-Path $Python)) { Write-Error "venv not found at $Python - run Pha
 if (-not (Test-Path $EnvFile)) { Write-Error ".env not found - copy .env.example to .env and fill it in."; exit 1 }
 
 # Deploy the canonical agent config into the engine (engine dir is gitignored).
-Copy-Item (Join-Path $Root 'orphicos\config\agents.yaml') (Join-Path $EngineDir 'config\ufo\agents.yaml') -Force
+Copy-Item (Join-Path $Root 'client\config\agents.yaml') (Join-Path $EngineDir 'config\ufo\agents.yaml') -Force
 
 # Load .env into process environment; the engine's config loader expands ${VAR}.
 Get-Content $EnvFile | ForEach-Object {
@@ -34,7 +34,7 @@ try {
     $models = Invoke-RestMethod -Uri "$env:LOCAL_MODEL_BASE/models" -TimeoutSec 5
     Write-Host "Brain online: $(($models.data | ForEach-Object id) -join ', ')"
 } catch {
-    Write-Error "Brain endpoint $env:LOCAL_MODEL_BASE is not responding - start it first: brain\scripts\brain_up.ps1"
+    Write-Error "Brain endpoint $env:LOCAL_MODEL_BASE is not responding - start it first: server\scripts\brain_up.ps1"
     exit 1
 }
 

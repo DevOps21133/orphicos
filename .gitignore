@@ -1,5 +1,9 @@
-# Secrets
+﻿# Secrets - every .env at any depth (server/.env holds the provider key)
 .env
+**/.env
+
+# Client local config (copied from client/config.example.toml)
+client/config.toml
 
 # Vendored engine (cloned in Phase 1, pinned in docs/engine-version.txt)
 engine/UFO/
