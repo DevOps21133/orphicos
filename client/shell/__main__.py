@@ -46,10 +46,12 @@ def main() -> int:
         session = hub.active  # capture: the worker thread may clear it as a run ends
         if session is not None:
             session.stop()
-        hub.emit({"type": "status", "message": "Kill switch pressed (Ctrl+Alt+Space)."})
+        chord = app.state.kill_label or "kill switch"
+        hub.emit({"type": "status", "message": f"Kill switch pressed ({chord})."})
 
     hotkey = GlobalKillHotkey(panic)
-    hotkey.start()
+    armed = hotkey.start()  # may fall back to another chord, or None if all are taken
+    app.state.kill_label = armed  # the UI shows the real chord (or STOP-button-only) via /api/status
 
     host, port = cfg.shell_host, cfg.shell_port
     url = f"http://{host}:{port}/"

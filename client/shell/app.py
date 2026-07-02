@@ -84,6 +84,7 @@ def create_app(submit: SubmitFn, health_check: Callable[[], bool],
 
     app = FastAPI(title="OrphicOS shell", lifespan=lifespan)
     app.state.hub = hub  # the kill-switch hotkey reaches the active session through this
+    app.state.kill_label = None  # set by __main__ to the chord that actually armed (or None)
 
     @app.get("/", response_class=HTMLResponse)
     async def index() -> str:
@@ -94,7 +95,8 @@ def create_app(submit: SubmitFn, health_check: Callable[[], bool],
         connected = await asyncio.to_thread(health_check)
         return JSONResponse({"connected": bool(connected),
                              "server_base": server_base,
-                             "running": hub.active is not None})
+                             "running": hub.active is not None,
+                             "kill_hotkey": app.state.kill_label})
 
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket) -> None:

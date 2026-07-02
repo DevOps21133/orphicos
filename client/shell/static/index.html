@@ -162,7 +162,7 @@
 
   <footer>Processed securely on OrphicOS servers. Encrypted in transit. Your screen data is never stored.</footer>
 
-  <button class="stop" id="stop">STOP<small>Ctrl + Alt + Space</small></button>
+  <button class="stop" id="stop">STOP<small id="stopHint">click to halt</small></button>
 
   <div class="overlay" id="overlay">
     <div class="modal">
@@ -185,6 +185,7 @@
   const pill = $("pill"), pillText = $("pillText");
   const flag = $("flag"), errBanner = $("err");
   const overlay = $("overlay"), mVerb = $("mVerb"), mWhat = $("mWhat");
+  const stopHint = $("stopHint");
   let pendingApproval = null;
   let running = false;
 
@@ -337,6 +338,8 @@
       const r = await fetch("/api/status");
       const s = await r.json();
       setPill(s.connected, s.connected ? "Connected to OrphicOS brain" : "OrphicOS brain unreachable");
+      // Show the panic chord that actually armed; if none was free, the button still halts.
+      stopHint.textContent = s.kill_hotkey ? s.kill_hotkey : "click to halt";
     } catch (_) {
       setPill(false, "OrphicOS brain unreachable");
     }
