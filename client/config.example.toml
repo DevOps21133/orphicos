@@ -7,4 +7,12 @@
 SERVER_BASE = "https://brain.orphicos.ai"
 
 # The per-user OrphicOS token is issued at sign-in (Phase 6) and injected at
-# runtime. It is NOT stored in this example file, and it is NOT an LLM key.
+# runtime via the ORPHIC_TOKEN environment variable. It is NOT stored in this
+# example file, and it is NOT an LLM key.
+#
+# For local development, point SERVER_BASE at your locally running brain:
+#   SERVER_BASE = "http://localhost:8000"
+
+# Optional client tuning (defaults shown):
+# REQUEST_TIMEOUT = 30.0   # seconds to wait for each brain decision
+# MAX_STEPS = 12           # max perceive->decide->act cycles per command

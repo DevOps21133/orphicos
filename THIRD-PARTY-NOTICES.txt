@@ -36,6 +36,49 @@ Copyright:  Copyright (c) 2025 CursorTouch
     IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
+Windows-Use dependency footprint   (client — ACCEPTED DEBT, STRIP BEFORE SHIP)
+--------------------------------------------------------------------------------
+windows-use 0.8.1 installs a large transitive tree (~160 packages) into client/.venv,
+because upstream bundles many optional "channel" and LLM-provider integrations we do
+not use. The OrphicOS client uses ONLY windows-use's headless Desktop (UI-tree
+perception + action); it never uses its LLM Agent, providers, telemetry, or channels.
+
+Wall status (Rule 1): the client loads NONE of the bundled LLM provider SDKs and NO
+telemetry at runtime. This is enforced in client/_engine.py, which stubs windows-use's
+Agent before import so windows_use.providers (and every provider SDK) never executes,
+and sets ANONYMIZED_TELEMETRY=false. Proven by client/_engine.py assert_wall_clean().
+
+Full installed set (authoritative record, Rule 9): client/requirements-lock.txt.
+.venv is gitignored and NOT shipped to users.
+
+License red flags to REMOVE/REPLACE before ship (present on disk, NOT loaded by the
+client, MUST NOT enter the installer):
+
+  fuzzywuzzy            0.18.0   GPL-2.0    \  used by windows-use for fuzzy app-name
+  python-Levenshtein   0.27.3   GPL-2.0    |  matching; strong copyleft — forbidden in
+  Levenshtein          0.27.3   GPL-2.0    /  a shipped closed-source client (Rule 9).
+  python-telegram-bot  22.8     LGPL-3.0      unused Telegram channel; weak copyleft.
+
+  (RapidFuzz 3.14.5, MIT, is also installed and is the permissive replacement for the
+  fuzzywuzzy/Levenshtein stack — the ship-time fix is to drop the GPL trio.)
+
+Also present but unused (remove before ship to shrink and de-risk the client):
+  LLM/STT/TTS SDKs: openai, anthropic, google-genai, groq, cerebras_cloud_sdk,
+    litellm, ollama, mistralai, deepgram-sdk, elevenlabs  (mostly MIT / Apache-2.0)
+  Telemetry: posthog 7.21.2 (MIT) — disabled and never loaded.
+  Messaging channels: discord.py, slack_sdk, slack_bolt, neonize, pysignalclirestapi.
+  Heavy tooling: datasets, pandas, pyarrow, jupyter/ipython, twine, keyring.
+
+Ship-time plan (Phase 6): replace windows-use with a minimal vendored subset
+(uia + agent/desktop + agent/tree only, all MIT) so the client depends on NONE of the
+above. Tracked as release-blocking cleanup.
+
+Genuinely used by the client at runtime (all permissive):
+  windows-use 0.8.1 MIT · pywin32 312 (PSF/BSD-style) · comtypes 1.4.16 MIT ·
+  pillow 12.3.0 MIT-CMU/HPND · rapidfuzz 3.14.5 MIT · tabulate 0.10.0 MIT ·
+  httpx 0.28.1 BSD-3-Clause (client -> brain transport)
+
+--------------------------------------------------------------------------------
 Big-brain LLM provider   (server — server/brain.py ONLY; Phase 1)
 --------------------------------------------------------------------------------
 Provider:   NVIDIA API Catalog (OpenAI-compatible gateway, integrate.api.nvidia.com)

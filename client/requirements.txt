@@ -1,0 +1,13 @@
+# OrphicOS thin-client runtime dependencies.
+#
+# The client uses ONLY windows-use's headless Desktop (UI-tree perception + action)
+# and httpx (transport to the OrphicOS brain). It loads NO LLM provider SDK and NO
+# telemetry — the wall is enforced at runtime in client/_engine.py (CLAUDE.md Rule 1).
+#
+# ACCEPTED DEBT: windows-use 0.8.1 pulls a large transitive tree that includes
+# GPL/LGPL and provider/telemetry packages the client never loads. The exact
+# installed set is pinned in client/requirements-lock.txt. Before ship (Phase 6),
+# windows-use is replaced by a minimal vendored subset — see THIRD-PARTY-NOTICES.txt.
+
+windows-use==0.8.1
+httpx>=0.28,<1.0

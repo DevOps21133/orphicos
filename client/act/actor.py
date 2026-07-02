@@ -1,0 +1,136 @@
+"""Execute the brain's actions on the live Windows desktop.
+
+Maps the server's action contract — {type, target_selector|coords, value} — onto
+windows-use's headless `Desktop` methods (click / type / scroll / shortcut / app).
+No LLM here: the *decide* step already happened on the server; this only acts.
+
+Element targeting: the brain returns `target_selector` (the element's Name, as shown
+in the tree it received) or, on the vision fallback, raw `coords`. We resolve a name
+to the matching interactive node's id in the CURRENT snapshot, then ask the Desktop
+for that element's live centre coordinates.
+"""
+from __future__ import annotations
+
+from time import sleep
+
+from client._engine import Desktop, escape_text_for_sendkeys, uia
+
+
+class ActionError(RuntimeError):
+    """An action could not be executed (unknown type, or no matching element)."""
+
+
+class Actor:
+    def __init__(self, desktop: Desktop) -> None:
+        self._desktop = desktop
+
+    def execute(self, action: dict) -> str:
+        """Run one action; return a short human-readable result for the live log."""
+        atype = str(action.get("type") or "").strip()
+        handler = getattr(self, f"_do_{atype}", None)
+        if handler is None:
+            raise ActionError(f"unsupported action type: {atype!r}")
+        return handler(action, action.get("value"))
+
+    # --- element resolution ------------------------------------------------
+    def _resolve_loc(self, action: dict) -> tuple[int, int] | None:
+        coords = action.get("coords")
+        if isinstance(coords, (list, tuple)) and len(coords) == 2:
+            return int(coords[0]), int(coords[1])
+        sel = action.get("target_selector")
+        if not sel:
+            return None
+        label = self._label_for(str(sel))
+        if label is None:
+            raise ActionError(f"no on-screen element matches {sel!r}")
+        return self._desktop.get_coordinates_from_label(label)
+
+    def _label_for(self, sel: str) -> int | None:
+        """Resolve a target_selector (element id or Name) to an interactive-node id."""
+        state = self._desktop.desktop_state
+        nodes = (state.tree_state.interactive_nodes or []) if state and state.tree_state else []
+        if not nodes:
+            return None
+        s = sel.strip()
+        if s.isdigit() and 0 <= int(s) < len(nodes):
+            return int(s)
+        low = s.lower()
+        named = [(i, (n.name or "").strip()) for i, n in enumerate(nodes)]
+        for i, name in named:                                   # exact, case-insensitive
+            if name.lower() == low:
+                return i
+        for i, name in named:                                   # prefix
+            if name and name.lower().startswith(low):
+                return i
+        for i, name in named:                                   # substring
+            if name and low in name.lower():
+                return i
+        return None
+
+    def _require_loc(self, action: dict) -> tuple[int, int]:
+        loc = self._resolve_loc(action)
+        if loc is None:
+            raise ActionError("action needs a target element or coordinates")
+        return loc
+
+    # --- action handlers ---------------------------------------------------
+    def _do_launch(self, action: dict, value) -> str:
+        name = value or action.get("target_selector")
+        if not name:
+            raise ActionError("launch needs an app name in 'value'")
+        return str(self._desktop.app(mode="launch", name=str(name)))
+
+    def _do_focus_window(self, action: dict, value) -> str:
+        name = value or action.get("target_selector")
+        if not name:
+            raise ActionError("focus_window needs a window name")
+        return str(self._desktop.app(mode="switch", name=str(name)))
+
+    def _do_click(self, action: dict, value) -> str:
+        loc = self._require_loc(action)
+        self._desktop.click(loc, button="left", clicks=1)
+        return f"clicked {loc}"
+
+    def _do_double_click(self, action: dict, value) -> str:
+        loc = self._require_loc(action)
+        self._desktop.click(loc, button="left", clicks=2)
+        return f"double-clicked {loc}"
+
+    def _do_right_click(self, action: dict, value) -> str:
+        loc = self._require_loc(action)
+        self._desktop.click(loc, button="right", clicks=1)
+        return f"right-clicked {loc}"
+
+    def _do_type(self, action: dict, value) -> str:
+        text = "" if value is None else str(value)
+        loc = self._resolve_loc(action)
+        if loc is not None:
+            self._desktop.type(loc, text=text)
+            return f"typed into {loc}"
+        # No target -> type into whatever control currently has focus.
+        uia.SendKeys(escape_text_for_sendkeys(text), interval=0.01, waitTime=0.05)
+        return "typed into focused control"
+
+    def _do_press(self, action: dict, value) -> str:
+        if not value:
+            raise ActionError("press needs a key chord in 'value' (e.g. 'ctrl+s')")
+        self._desktop.shortcut(str(value))
+        return f"pressed {value}"
+
+    def _do_scroll(self, action: dict, value) -> str:
+        loc = self._resolve_loc(action)  # optional; None scrolls the focused window
+        direction = str(value).lower() if value else "down"
+        if direction not in ("up", "down", "left", "right"):
+            direction = "down"
+        stype = "horizontal" if direction in ("left", "right") else "vertical"
+        self._desktop.scroll(loc=loc, type=stype, direction=direction, wheel_times=3)
+        return f"scrolled {direction}"
+
+    def _do_wait(self, action: dict, value) -> str:
+        try:
+            seconds = float(value) if value is not None else 1.0
+        except (TypeError, ValueError):
+            seconds = 1.0
+        seconds = max(0.0, min(seconds, 10.0))  # cap so the loop stays responsive
+        sleep(seconds)
+        return f"waited {seconds:g}s"
