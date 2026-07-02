@@ -1,0 +1,7 @@
+# OrphicOS server (brain) runtime dependencies. Permissive licenses only
+# (MIT / BSD / Apache-2.0). Record every dependency in THIRD-PARTY-NOTICES.txt.
+fastapi
+uvicorn
+openai
+pydantic
+python-dotenv

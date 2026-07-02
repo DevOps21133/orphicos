@@ -3,6 +3,9 @@
 # .env.example files are intentionally tracked and are NOT matched by this rule.
 **/.env
 
+# Per-user auth tokens (issued at runtime; not for git)
+server/tokens.json
+
 # Python
 __pycache__/
 *.py[cod]
