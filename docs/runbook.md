@@ -4,7 +4,7 @@
 
 **Tagline:** *OrphicOS — the machine works. You don't.*
 
-**The play in one line:** Stand on Microsoft's MIT-licensed UFO² (the Windows "Desktop AgentOS"), wrap it in the OrphicOS brand + guardrails, swap the brain to local UI-TARS on the RTX 5090 for the "never phones home" moat, and launch it loud on Raw AI.
+**The play in one line:** Stand on Microsoft's MIT-licensed UFO² (the Windows "Desktop AgentOS"), wrap it in the OrphicOS brand + guardrails, run the brain locally (UI-TARS on the RTX 5090) for the "never phones home" moat, and launch it loud on Raw AI.
 
 ---
 
@@ -14,14 +14,14 @@ Your machine: Windows 11, Core Ultra 9 285K, RTX 5090 32GB, 128GB RAM. More than
 
 1. **Python 3.10–3.12** installed and on PATH (`python --version`).
 2. **Git** installed (`git --version`).
-3. **Anthropic API key** ready (Phase 1 brain = Claude via API — ship fast first, go local later).
+3. **No cloud API keys.** The brain is a local model on the 5090 from day one — fully local, nothing phones home.
 4. **Display scaling to 100%** on the monitor the agent will drive. Per-monitor DPI scaling is the #1 cause of "agent clicks the wrong pixel" on Windows. Kill that landmine on day one.
 5. **A dedicated Windows user account** (e.g. `orphic-agent`) or a Windows Sandbox/VM for early testing. The agent screenshots the desktop and sends them to the LLM — keep wallets, passwords, and private tabs off that desktop. Golden rule survives: **the agent gets its own world.**
 6. **OBS Studio** installed. Every test run is potential launch footage. Record everything — the blooper where it opens Paint instead of Excel is *also* content.
 
 ---
 
-## Phase 1 — Install UFO² and wire Claude (Day 1–2)
+## Phase 1 — Install UFO² and wire the local brain (Day 1–2)
 
 **Goal:** one natural-language command → UFO² drives a real Windows app. That's the "it's alive!" moment.
 
@@ -35,9 +35,9 @@ pip install -r requirements.txt
 
 # 3. Configure the agent brains
 copy config\ufo\agents.yaml.template config\ufo\agents.yaml
-# Edit agents.yaml → add your API key. UFO supports multiple LLMs
-# (OpenAI, Claude, Qwen, Gemini) — see their Model Configuration Guide
-# in the docs at microsoft.github.io/UFO for the exact Claude fields.
+# Edit agents.yaml → point it at the local model server (OpenAI-compatible
+# endpoint on localhost) — see their Model Configuration Guide in the docs
+# at microsoft.github.io/UFO for the exact fields.
 
 # 4. First flight
 python -m ufo --task first_run
@@ -110,7 +110,7 @@ UI-TARS is the purpose-built open computer-use vision model — trained on UI sc
 **Phased honestly:**
 - 4a. Serve UI-TARS-7B (quantized) → verify tokens flow.
 - 4b. Wire UFO to the local endpoint → re-run the invoice demo. Expect tuning; grounding models swap less cleanly than chat models. Budget a full day of fiddling — that day *is* the moat being poured.
-- 4c. Keep Claude API as configurable fallback for the hardest planning steps (hybrid mode). Local-first, cloud-optional — you get the privacy story *and* the reliability.
+- 4c. Local only — no cloud fallback. If a workflow won't hold up on the local model, bulletproof a narrower workflow instead of phoning home.
 
 **Why this is the business:** every cloud agent (ChatGPT agent, Mariner, Devin) ships your screen to their servers. OrphicOS on a 5090 doesn't. For companies with contracts, compliance, and paranoia — which is to say, companies with *money* — that's not a feature, that's the reason to buy. And nobody in your audience can copy it without your hardware obsession. The Mac Studio hunt? Same story, bigger models, later chapter.
 

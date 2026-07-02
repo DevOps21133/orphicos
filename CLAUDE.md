@@ -19,7 +19,7 @@ Architecture:
                                                            v
                                         [ Engine: Microsoft UFO² (vendored, unmodified) ]
                                                            │
-                                        [ Brain: Claude API now → local UI-TARS on RTX 5090 later ]
+                                        [ Brain: local model on RTX 5090 (UI-TARS via OpenAI-compatible endpoint) — fully local, no cloud APIs ]
                                                            │
                                         [ Windows desktop: apps, files, UI Automation ]
 ```
@@ -72,7 +72,7 @@ orphicos/
 
 Tasks:
 1. Verify: `python --version` (3.10–3.12), `git --version`, `nvidia-smi` (RTX 5090 visible, CUDA 12.x).
-2. Create the repo layout above, `.gitignore`, `.env.example` (keys: `ANTHROPIC_API_KEY=`, `LOCAL_MODEL_BASE=`), initial commit.
+2. Create the repo layout above, `.gitignore`, `.env.example` (keys: `LOCAL_MODEL_BASE=`, `LOCAL_MODEL_NAME=`), initial commit.
 3. Create `THIRD-PARTY-NOTICES.txt` seeded with: Microsoft UFO (MIT), and placeholders for UI-TARS (Apache-2.0 code / Apache-2.0 weights per model card) and the chosen STT model. Include full MIT license text for UFO.
 4. Write `scripts/check_env.ps1` that re-runs all checks and prints PASS/FAIL.
 
@@ -85,7 +85,7 @@ Tasks:
 Tasks:
 1. Clone the engine: `git clone https://github.com/microsoft/UFO.git engine/UFO` (do NOT add as submodule of our history; add `engine/UFO` to `.gitignore` and record the pinned commit hash in `docs/engine-version.txt`).
 2. `pip install -r engine/UFO/requirements.txt` into a venv at `./.venv`. Log any failed packages and resolve one by one (report if blocked).
-3. Copy `engine/UFO/config/ufo/agents.yaml.template` → `agents.yaml`. Configure the HOST/APP agents to use the Anthropic API, reading the key from `.env` (consult `engine/UFO` docs / microsoft.github.io/UFO Model Configuration for exact fields — do not guess field names; read the template and docs first).
+3. Copy `engine/UFO/config/ufo/agents.yaml.template` → `agents.yaml`. Configure the HOST/APP agents to use the LOCAL model server (OpenAI-compatible endpoint), reading `LOCAL_MODEL_BASE` / `LOCAL_MODEL_NAME` from `.env` (consult `engine/UFO` docs / microsoft.github.io/UFO Model Configuration for exact fields — do not guess field names; read the template and docs first). No cloud API keys anywhere.
 4. Write `scripts/run_task.ps1` — activates venv, loads `.env`, launches `python -m ufo --task <name>`.
 5. **STOP POINT.** Print for the human: the 3 warm-up tasks to run manually, in order:
    - "Open Notepad and write a haiku about machines doing the work."
@@ -143,7 +143,7 @@ Voice = a front door only. STT output lands in the SAME command bar as typed tex
 Goal: the demo completes with **zero external API calls.**
 
 1. Model serving runs BESIDE Windows: vLLM in **WSL2 or Docker Desktop with GPU passthrough**, serving quantized **UI-TARS-1.5-7B**, exposing an OpenAI-compatible endpoint on `http://localhost:<port>`. (Alternative if vLLM fights back: llama.cpp/LM Studio with the GGUF build.) Write setup steps you executed into `docs/local-model.md` as you go.
-2. Add a second agents config profile pointing UFO at `LOCAL_MODEL_BASE` from `.env`. Keep the Claude profile intact — switching profiles must be one script flag: `scripts/run_task.ps1 -Brain local|claude`.
+2. The agents config already points UFO at `LOCAL_MODEL_BASE` from `.env` (done in Phase 1). This phase hardens the serving stack behind that endpoint.
 3. Expect grounding/prompt-format friction when swapping a chat model for a GUI-grounding model — read UFO's local-model docs first, adapt config only (rule 1: never patch engine source; if engine-side changes seem required, stop and report options).
 4. **STOP POINT.** Human runs the demo on `-Brain local` with a network monitor open. The money shot: GPU screaming, network silent.
 
