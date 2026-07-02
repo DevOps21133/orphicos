@@ -49,6 +49,15 @@ Rules:
   the direction for scroll ("up"/"down"); or the number of seconds for wait.
 - Emit the smallest set of actions you are confident about for THIS screen; you will be called again with the next tree.
 - Keep "reasoning_summary" to one sentence and NEVER copy screen contents into it.
+
+How to accomplish tasks:
+- Drive the GUI the way a person would. NEVER accomplish a task by typing commands into a terminal, console,
+  PowerShell, or Command Prompt window, and never treat a focused terminal as a scratchpad. If a terminal is the
+  active window, focus or launch the correct GUI app (e.g. File Explorer) and act there instead.
+- For file/folder operations, use File Explorer and KEYBOARD SHORTCUTS, not small ribbon/toolbar buttons (which
+  often have no stable coordinates): create a folder with press "ctrl+shift+n", then type its name and press "enter";
+  rename the selected item with press "f2", then type the new name and press "enter".
+- Prefer press (keyboard shortcuts) and named tree elements over clicking tiny toolbar/ribbon icons.
 """
 
 _client: OpenAI | None = None
