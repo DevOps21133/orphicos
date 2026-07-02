@@ -37,8 +37,13 @@ def main() -> int:
     worker = DesktopWorker(brain, cfg.max_steps)
     worker.start()  # constructs + warms the windows-use Desktop on its own (COM) thread
 
+    # Only the shell's own page may open the control WebSocket (CSWSH defense in app.py).
+    # The user reaches it at 127.0.0.1; localhost is allowed for the manually-typed variant.
+    allowed_origins = {f"http://{cfg.shell_host}:{cfg.shell_port}",
+                       f"http://127.0.0.1:{cfg.shell_port}",
+                       f"http://localhost:{cfg.shell_port}"}
     app = create_app(submit=worker.submit, health_check=brain.health,
-                     server_base=cfg.server_base)
+                     server_base=cfg.server_base, allowed_origins=allowed_origins)
 
     # Global kill switch: halt the active run even if the UI is buried (§9.3).
     def panic() -> None:

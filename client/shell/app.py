@@ -62,7 +62,13 @@ class Hub:
 
 
 def create_app(submit: SubmitFn, health_check: Callable[[], bool],
-               server_base: str = "") -> FastAPI:
+               server_base: str = "", allowed_origins: Optional[set[str]] = None) -> FastAPI:
+    # allowed_origins guards /ws against Cross-Site WebSocket Hijacking: a page on any other
+    # origin could otherwise open ws://127.0.0.1:<port>/ws and drive the desktop, since
+    # browsers apply no Same-Origin Policy to the WS handshake. Browsers ALWAYS send an
+    # Origin header on that handshake and JS cannot forge it, so allowing only our own
+    # origin blocks every cross-origin drive-by. __main__ passes the shell's real origin(s);
+    # None means "not configured" (used by tests) and disables the check.
     hub = Hub()
 
     @asynccontextmanager
@@ -100,12 +106,18 @@ def create_app(submit: SubmitFn, health_check: Callable[[], bool],
 
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket) -> None:
+        origin = ws.headers.get("origin")
+        # Reject a cross-origin handshake before accepting it (CSWSH defense). A missing
+        # Origin is a non-browser client (tests/tooling), which is outside this threat model.
+        if allowed_origins is not None and origin is not None and origin not in allowed_origins:
+            await ws.close(code=1008)  # policy violation
+            return
         await ws.accept()
         hub.add(ws)
         try:
             while True:
                 msg = await ws.receive_json()
-                await _handle(msg, hub, submit)
+                await _handle(msg, hub, submit, ws)
         except WebSocketDisconnect:
             pass
         finally:
@@ -114,16 +126,18 @@ def create_app(submit: SubmitFn, health_check: Callable[[], bool],
     return app
 
 
-async def _handle(msg: dict, hub: Hub, submit: SubmitFn) -> None:
+async def _handle(msg: dict, hub: Hub, submit: SubmitFn, ws: WebSocket) -> None:
     kind = msg.get("type")
 
     if kind == "run":
         command = (msg.get("command") or "").strip()
+        # Validation errors answer the ONE socket that asked — broadcasting them would
+        # reset an unrelated tab that is legitimately mid-run.
         if not command:
-            hub.emit({"type": "error", "message": "Type a command first."})
+            await ws.send_json({"type": "error", "message": "Type a command first."})
             return
         if hub.active is not None:
-            hub.emit({"type": "error", "message": "A command is already running."})
+            await ws.send_json({"type": "error", "message": "A command is already running."})
             return
         session = RunSession(command, hub.emit)
         hub.active = session

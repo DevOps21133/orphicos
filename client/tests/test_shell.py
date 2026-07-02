@@ -47,6 +47,22 @@ class GateTests(unittest.TestCase):
     def test_action_risk_in_pressed_key(self):
         self.assertEqual(gate.action_needs_approval(RISKY_PRESS), "delete")
 
+    def test_del_key_abbreviation_is_risky(self):
+        # The Del key deletes but carries no spelled-out verb; both bare and combined.
+        self.assertEqual(gate.action_needs_approval({"type": "press", "value": "del"}), "delete")
+        self.assertEqual(gate.action_needs_approval({"type": "press", "value": "shift+del"}), "delete")
+
+    def test_ctrl_enter_chord_is_risky_send(self):
+        self.assertEqual(gate.action_needs_approval({"type": "press", "value": "ctrl+enter"}), "send")
+
+    def test_typing_the_letters_del_is_not_risky(self):
+        # Typing d-e-l into a document is not a delete; only key-press actions count.
+        self.assertIsNone(gate.action_needs_approval({"type": "type", "value": "del"}))
+
+    def test_benign_chords_need_no_approval(self):
+        self.assertIsNone(gate.action_needs_approval({"type": "press", "value": "ctrl+s"}))
+        self.assertIsNone(gate.action_needs_approval({"type": "press", "value": "enter"}))
+
     def test_safe_action_needs_no_approval(self):
         self.assertIsNone(gate.action_needs_approval({"type": "type", "value": "the machine works"}))
 
@@ -238,6 +254,35 @@ class ShellAppTests(unittest.TestCase):
                 self.assertEqual(ev["type"], "error")
                 self.assertIn("already running", ev["message"])
         self.assertEqual(len(submitted), 1)
+
+    def test_ws_rejects_cross_origin_handshake(self):
+        # CSWSH defense: a socket from a foreign origin must be refused before it can drive.
+        app = create_app(submit=lambda s, d: None, health_check=lambda: True,
+                         allowed_origins={"http://127.0.0.1:8700"})
+        with TestClient(app) as client:
+            with self.assertRaises(Exception):  # handshake closed with policy-violation 1008
+                with client.websocket_connect("/ws", headers={"origin": "http://evil.example"}):
+                    pass
+            # The shell's own origin still connects.
+            with client.websocket_connect("/ws", headers={"origin": "http://127.0.0.1:8700"}) as ws:
+                ws.send_json({"type": "run", "command": "   "})
+                self.assertEqual(ws.receive_json()["type"], "error")
+
+    def test_validation_error_reaches_only_the_requesting_tab(self):
+        # Two tabs open; a second tab's "already running" error must NOT reset tab one.
+        submitted = []
+        app = create_app(submit=lambda s, d: submitted.append(s), health_check=lambda: True)
+        with TestClient(app) as client:
+            with client.websocket_connect("/ws") as ws1, client.websocket_connect("/ws") as ws2:
+                ws1.send_json({"type": "run", "command": "first"})
+                self.assertEqual(ws1.receive_json()["type"], "run_started")  # broadcast
+                self.assertEqual(ws2.receive_json()["type"], "run_started")  # broadcast
+                ws2.send_json({"type": "run", "command": "second"})
+                self.assertEqual(ws2.receive_json()["type"], "error")        # sender only
+                # Tab one's next event is its own stop's status — proving the error skipped it.
+                ws1.send_json({"type": "stop"})
+                ev = ws1.receive_json()
+                self.assertEqual(ev["type"], "status")
 
 
 if __name__ == "__main__":
