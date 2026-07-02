@@ -160,7 +160,7 @@ if (Test-Path $clientDir) {
         Where-Object { $_.FullName -notmatch '\\\.git\\' }
     $leaks = @()
     foreach ($f in $clientFiles) {
-        $hit = Select-String -Path $f.FullName -Pattern 'LLM_API_KEY\s*=\s*\S', 'sk-[A-Za-z0-9]{16,}' -ErrorAction SilentlyContinue
+        $hit = Select-String -Path $f.FullName -Pattern 'LLM_API_KEY\s*=\s*\S', 'LLM_BASE_URL\s*=\s*\S', 'sk-[A-Za-z0-9]{16,}', 'nvapi-[A-Za-z0-9_-]{16,}' -ErrorAction SilentlyContinue
         if ($hit) { $leaks += $f.FullName.Substring($RepoRoot.Length + 1) }
     }
     if ($leaks.Count -eq 0) {
