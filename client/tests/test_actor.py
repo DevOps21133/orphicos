@@ -113,16 +113,43 @@ class ActionDispatchTests(unittest.TestCase):
 
     def test_type_into_focus_uses_sendkeys_fallback(self):
         # No target -> type into whatever has focus, via uia.SendKeys (patched: no real keys).
-        with patch("client.act.actor.uia.SendKeys") as send:
+        # foreground_console_label -> None: a normal GUI window has focus, so keys are allowed.
+        with patch("client.act.actor.uia.SendKeys") as send, \
+                patch("client.act.actor.foreground_console_label", return_value=None):
             result = self.actor.execute({"type": "type", "value": "focused text"})
         send.assert_called_once()
         # windows-use is never asked to click/type when there's no target.
         self.assertFalse(any(c[0] == "type" for c in self.desktop.calls))
         self.assertEqual(result, "typed into focused control")
 
+    def test_untargeted_type_refused_when_console_focused(self):
+        # A focused terminal must NOT receive blind keystrokes (they'd run as shell commands).
+        with patch("client.act.actor.uia.SendKeys") as send, \
+                patch("client.act.actor.foreground_console_label", return_value="ConsoleWindowClass"):
+            with self.assertRaises(ActionError) as ctx:
+                self.actor.execute({"type": "type", "value": "test_orphic"})
+        send.assert_not_called()  # nothing typed into the console
+        self.assertIn("console", str(ctx.exception).lower())
+
+    def test_targeted_type_not_blocked_by_console_guard(self):
+        # A resolved on-screen target types into that element, not the foreground, so the
+        # console guard does not apply even if a terminal happens to be foreground.
+        with patch("client.act.actor.foreground_console_label", return_value="ConsoleWindowClass"):
+            self.actor.execute({"type": "type", "target_selector": "Text editor", "value": "hi"})
+        self.assertIn(("type", (102, 202), "hi"), self.desktop.calls)
+
     def test_press_dispatches_shortcut(self):
-        self.actor.execute({"type": "press", "value": "ctrl+s"})
+        with patch("client.act.actor.foreground_console_label", return_value=None):
+            self.actor.execute({"type": "press", "value": "ctrl+s"})
         self.assertIn(("shortcut", "ctrl+s"), self.desktop.calls)
+
+    def test_press_refused_when_console_focused(self):
+        # Shortcuts (ctrl+shift+n, f2, enter, ...) must not fire into a focused console either.
+        with patch("client.act.actor.foreground_console_label", return_value="powershell.exe"):
+            with self.assertRaises(ActionError) as ctx:
+                self.actor.execute({"type": "press", "value": "ctrl+shift+n"})
+        self.assertFalse(any(c[0] == "shortcut" for c in self.desktop.calls))
+        self.assertIn("console", str(ctx.exception).lower())
 
     def test_press_without_value_raises(self):
         with self.assertRaises(ActionError):

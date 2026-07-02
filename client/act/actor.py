@@ -14,10 +14,21 @@ from __future__ import annotations
 from time import sleep
 
 from client._engine import Desktop, escape_text_for_sendkeys, uia
+from client.act._focus_guard import foreground_console_label
 
 
 class ActionError(RuntimeError):
     """An action could not be executed (unknown type, or no matching element)."""
+
+
+def _refuse_if_console(what: str) -> None:
+    """Guard blind keystrokes: OrphicOS never drives a terminal, so if a console has
+    focus these keys would run as shell commands (outside the kill switch). Skip them."""
+    console = foreground_console_label()
+    if console is not None:
+        raise ActionError(
+            f"refused to send {what} into a focused console ({console}); "
+            "no GUI target is focused")
 
 
 class Actor:
@@ -117,12 +128,14 @@ class Actor:
             self._desktop.type(loc, text=text)
             return f"typed into {loc}"
         # No target -> type into whatever control currently has focus.
+        _refuse_if_console("typed text")
         uia.SendKeys(escape_text_for_sendkeys(text), interval=0.01, waitTime=0.05)
         return "typed into focused control"
 
     def _do_press(self, action: dict, value) -> str:
         if not value:
             raise ActionError("press needs a key chord in 'value' (e.g. 'ctrl+s')")
+        _refuse_if_console(f"key chord {value!r}")
         self._desktop.shortcut(str(value))
         return f"pressed {value}"
 
