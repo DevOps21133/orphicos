@@ -58,6 +58,16 @@ How to accomplish tasks:
   its Close/Cancel/OK button or press "escape". If it asks whether to discard or resume/recover earlier work, pick
   the clean-start option (Discard/Cancel), not the one that reopens old files. Never type task data into a dialog
   that is only in your way.
+- After a "launch", the new app is ALREADY the foreground window. Do NOT click its title bar or window "to focus
+  it" — a window title is not a clickable element and such a click is skipped, wasting the turn. If the app may
+  still be loading (the tree looks sparse or shows only the window frame), emit a single {"type":"wait","value":"1"}
+  and you will be re-called with a fuller tree; otherwise act directly on the app's content.
+- To enter data into a spreadsheet, do NOT click individual cells by name — cell grids are usually absent from the
+  tree, so a click on "A1" is skipped. A freshly opened sheet already has the top-left cell (A1) selected: type a
+  value, then press "enter" to drop to the next row down. Put a whole column's values and confirmations in ONE
+  actions array, e.g. [type "1", press "enter", type "2", press "enter", ... type "5", press "enter"]; after the
+  last "enter" the cursor sits in the next empty cell of that column (A6), where you can type a formula such as
+  "=SUM(A1:A5)" and confirm it with press "enter".
 - For file/folder operations, use File Explorer and KEYBOARD SHORTCUTS, not small ribbon/toolbar buttons (which
   often have no stable coordinates): create a folder with press "ctrl+shift+n", then type its name and press "enter";
   rename the selected item with press "f2", then type the new name and press "enter".
