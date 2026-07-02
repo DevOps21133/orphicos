@@ -27,11 +27,21 @@ def run_command(
     brain: BrainClient,
     max_steps: int,
     on_event: Callable[[dict], None],
+    should_stop: Callable[[], bool] | None = None,
+    approve: Callable[[dict], bool] | None = None,
 ) -> str:
     """Drive `command` to completion.
 
-    Returns an outcome: done | no_actions | brain_error | max_steps. Only `done` means
-    the command was satisfied (client.__main__ maps every other outcome to a nonzero exit).
+    Returns an outcome: done | no_actions | brain_error | max_steps | stopped. Only
+    `done` means the command was satisfied (client.__main__ maps every other outcome
+    to a nonzero exit).
+
+    Optional hooks (both default off, so the plain CLI path is unchanged):
+      should_stop() -> the shell's kill switch; when it returns True the run ends as
+        "stopped", checked before each step and before each action within a step.
+      approve(action) -> the shell's risk-verb gate; called before executing an action.
+        Returning False (a human denied it, or a stop arrived while asking) skips that
+        action and ends the run as "stopped".
     """
     perceiver = Perceiver(desktop)
     actor = Actor(desktop)
@@ -39,6 +49,8 @@ def run_command(
     consecutive_empty = 0
 
     for step in range(1, max_steps + 1):
+        if should_stop is not None and should_stop():
+            return "stopped"
         perception = perceiver.perceive()
         screenshot = perceiver.capture_screenshot() if perception.is_empty else None
         state = {"steps": history[-5:]}  # small; the server also truncates state
@@ -58,7 +70,18 @@ def run_command(
         actions = decision.get("actions") or []
         summary = decision.get("reasoning_summary", "")
         results = []
+        stopped = False
         for a in actions:
+            if should_stop is not None and should_stop():
+                stopped = True
+                break
+            if approve is not None and not approve(a):  # risk verb denied, or stop while asking
+                results.append(
+                    {"type": a.get("type"), "target": a.get("target_selector"),
+                     "value": a.get("value"), "result": "SKIPPED: not approved"}
+                )
+                stopped = True
+                break
             try:
                 outcome = actor.execute(a)
             except ActionError as e:
@@ -68,12 +91,14 @@ def run_command(
                  "value": a.get("value"), "result": outcome}
             )
 
-        done = bool(decision.get("done"))
+        done = bool(decision.get("done")) and not stopped
         on_event({"step": step, "reasoning": summary, "used_vision": screenshot is not None,
                   "actions": results, "done": done})
         history.append({"step": step, "reasoning": summary,
                         "actions": [{"type": r["type"], "target": r["target"]} for r in results]})
 
+        if stopped:
+            return "stopped"
         if done:
             return "done"
         if actions:

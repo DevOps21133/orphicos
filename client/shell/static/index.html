@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OrphicOS</title>
+<style>
+  :root {
+    --bg: #0a0b0f;
+    --panel: #12141b;
+    --panel-2: #171a23;
+    --line: #232733;
+    --text: #e7e9ee;
+    --muted: #8b90a0;
+    --accent: #6c8cff;
+    --good: #37d67a;
+    --bad: #ff5c6c;
+    --warn: #ffb454;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: radial-gradient(1200px 600px at 80% -10%, #14203a 0%, var(--bg) 55%);
+    color: var(--text);
+    font: 15px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 22px; border-bottom: 1px solid var(--line);
+    background: rgba(10,11,15,0.7); backdrop-filter: blur(8px);
+    position: sticky; top: 0; z-index: 5;
+  }
+  .brand { display: flex; align-items: baseline; gap: 12px; }
+  .wordmark { font-weight: 700; font-size: 20px; letter-spacing: 0.5px; }
+  .wordmark b { color: var(--accent); }
+  .tagline { color: var(--muted); font-size: 12.5px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 12px; border-radius: 999px; font-size: 13px;
+    border: 1px solid var(--line); background: var(--panel-2); color: var(--muted);
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .pill.on  .dot { background: var(--good); box-shadow: 0 0 10px var(--good); }
+  .pill.off .dot { background: var(--bad); }
+  .pill.on { color: var(--text); }
+
+  main { flex: 1; width: min(920px, 100%); margin: 0 auto; padding: 22px; display: flex; flex-direction: column; gap: 16px; }
+
+  .composer {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px; display: flex; gap: 10px; align-items: center;
+  }
+  .composer input {
+    flex: 1; background: transparent; border: none; outline: none;
+    color: var(--text); font-size: 16px; padding: 8px 6px;
+  }
+  .composer input::placeholder { color: var(--muted); }
+  button { font: inherit; cursor: pointer; border-radius: 10px; border: 1px solid var(--line); }
+  .mic {
+    width: 42px; height: 42px; border-radius: 50%; background: var(--panel-2);
+    color: var(--muted); font-size: 18px; display: grid; place-items: center;
+  }
+  .mic[disabled] { cursor: not-allowed; opacity: 0.55; }
+  .run {
+    background: var(--accent); color: #06122e; border: none; font-weight: 650;
+    padding: 11px 20px; font-size: 15px;
+  }
+  .run[disabled] { opacity: 0.5; cursor: default; }
+
+  .banner { display: none; padding: 11px 14px; border-radius: 10px; font-size: 13.5px; }
+  .banner.show { display: block; }
+  .banner.warn { background: rgba(255,180,84,0.12); border: 1px solid rgba(255,180,84,0.4); color: var(--warn); }
+  .banner.err  { background: rgba(255,92,108,0.12);  border: 1px solid rgba(255,92,108,0.4);  color: var(--bad); }
+
+  .feed { display: flex; flex-direction: column; gap: 12px; }
+  .step {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px; animation: rise 0.18s ease-out;
+  }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .step .head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .step .num { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .tag.vision { color: var(--warn); border-color: rgba(255,180,84,0.4); }
+  .tag.done { color: var(--good); border-color: rgba(55,214,122,0.4); }
+  .reason { color: var(--text); margin: 2px 0 10px; }
+  .actions { display: flex; flex-direction: column; gap: 6px; }
+  .act { display: flex; gap: 10px; align-items: baseline; font-size: 13.5px; }
+  .act .verb { color: var(--accent); font-weight: 600; min-width: 78px; }
+  .act .obj { color: var(--text); flex: 1; word-break: break-word; }
+  .act .res { color: var(--muted); font-size: 12.5px; }
+  .act .res.ok { color: var(--good); }
+  .act .res.skip { color: var(--warn); }
+  .sys { color: var(--muted); font-size: 13px; text-align: center; padding: 4px; }
+  .divider { text-align: center; color: var(--muted); font-size: 12px; margin: 4px 0; }
+  .divider span { background: var(--bg); padding: 0 10px; }
+
+  .empty { color: var(--muted); text-align: center; padding: 40px 0; }
+  .empty .big { font-size: 17px; color: var(--text); margin-bottom: 6px; }
+
+  footer { padding: 10px 22px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; text-align: center; }
+
+  .stop {
+    position: fixed; right: 22px; bottom: 22px; z-index: 20;
+    background: var(--bad); color: #2a0007; border: none; font-weight: 750;
+    padding: 15px 26px; font-size: 16px; border-radius: 14px;
+    box-shadow: 0 8px 30px rgba(255,92,108,0.35);
+  }
+  .stop small { display: block; font-weight: 500; font-size: 10.5px; opacity: 0.8; }
+
+  .overlay {
+    position: fixed; inset: 0; background: rgba(3,4,8,0.72); z-index: 40;
+    display: none; align-items: center; justify-content: center; backdrop-filter: blur(3px);
+  }
+  .overlay.show { display: flex; }
+  .modal {
+    width: min(460px, 90%); background: var(--panel); border: 1px solid var(--line);
+    border-radius: 16px; padding: 22px;
+  }
+  .modal h2 { margin: 0 0 6px; font-size: 18px; }
+  .modal .verb-chip {
+    display: inline-block; text-transform: uppercase; letter-spacing: 0.5px;
+    font-size: 12px; color: var(--warn); border: 1px solid rgba(255,180,84,0.4);
+    padding: 3px 10px; border-radius: 999px; margin-bottom: 12px;
+  }
+  .modal p { color: var(--muted); margin: 0 0 8px; }
+  .modal .what { color: var(--text); background: var(--panel-2); border: 1px solid var(--line); padding: 10px 12px; border-radius: 10px; word-break: break-word; }
+  .modal .row { display: flex; gap: 10px; margin-top: 18px; }
+  .modal .row button { flex: 1; padding: 12px; font-weight: 650; }
+  .approve { background: var(--good); color: #04210f; border: none; }
+  .deny { background: transparent; color: var(--bad); border: 1px solid var(--bad); }
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="wordmark">Orphic<b>OS</b></span>
+      <span class="tagline">the machine works. You don't.</span>
+    </div>
+    <div id="pill" class="pill"><span class="dot"></span><span id="pillText">Connecting…</span></div>
+  </header>
+
+  <main>
+    <div class="composer">
+      <button class="mic" id="mic" disabled title="Voice input — coming soon">🎙</button>
+      <input id="cmd" type="text" autocomplete="off" placeholder="What should the machine do?" />
+      <button class="run" id="run">Run</button>
+    </div>
+    <div id="flag" class="banner warn"></div>
+    <div id="err" class="banner err"></div>
+
+    <div class="feed" id="feed">
+      <div class="empty" id="empty">
+        <div class="big">Ready when you are.</div>
+        <div>Type a command above — e.g. “Open Notepad and type: the machine works.”</div>
+      </div>
+    </div>
+  </main>
+
+  <footer>Processed securely on OrphicOS servers. Encrypted in transit. Your screen data is never stored.</footer>
+
+  <button class="stop" id="stop">STOP<small>Ctrl + Alt + Space</small></button>
+
+  <div class="overlay" id="overlay">
+    <div class="modal">
+      <div class="verb-chip" id="mVerb">confirm</div>
+      <h2>Confirm this step</h2>
+      <p>OrphicOS is about to run an action that could be hard to undo:</p>
+      <div class="what" id="mWhat"></div>
+      <div class="row">
+        <button class="deny" id="mDeny">Cancel</button>
+        <button class="approve" id="mApprove">Approve</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const feed = $("feed"), empty = $("empty");
+  const runBtn = $("run"), cmd = $("cmd");
+  const pill = $("pill"), pillText = $("pillText");
+  const flag = $("flag"), errBanner = $("err");
+  const overlay = $("overlay"), mVerb = $("mVerb"), mWhat = $("mWhat");
+  let pendingApproval = null;
+  let running = false;
+
+  function clearEmpty() { if (empty) empty.remove(); }
+
+  function addSystem(text) {
+    clearEmpty();
+    const d = document.createElement("div");
+    d.className = "sys";
+    d.textContent = text;
+    feed.appendChild(d);
+    d.scrollIntoView({ behavior: "smooth", block: "end" });
+  }
+
+  function addDivider(text) {
+    clearEmpty();
+    const d = document.createElement("div");
+    d.className = "divider";
+    const s = document.createElement("span");
+    s.textContent = text;
+    d.appendChild(s);
+    feed.appendChild(d);
+    d.scrollIntoView({ behavior: "smooth", block: "end" });
+  }
+
+  function resultClass(res) {
+    const r = (res || "").toLowerCase();
+    if (r.startsWith("skipped")) return "skip";
+    if (r.startsWith("error")) return "skip";
+    return "ok";
+  }
+
+  function addStep(ev) {
+    clearEmpty();
+    const card = document.createElement("div");
+    card.className = "step";
+
+    const head = document.createElement("div");
+    head.className = "head";
+    const num = document.createElement("span");
+    num.className = "num";
+    num.textContent = "Step " + ev.step;
+    head.appendChild(num);
+    if (ev.used_vision) {
+      const t = document.createElement("span"); t.className = "tag vision"; t.textContent = "vision fallback"; head.appendChild(t);
+    }
+    if (ev.done) {
+      const t = document.createElement("span"); t.className = "tag done"; t.textContent = "done"; head.appendChild(t);
+    }
+    card.appendChild(head);
+
+    if (ev.reasoning) {
+      const r = document.createElement("div");
+      r.className = "reason";
+      r.textContent = ev.reasoning;
+      card.appendChild(r);
+    }
+
+    const acts = document.createElement("div");
+    acts.className = "actions";
+    (ev.actions || []).forEach((a) => {
+      const row = document.createElement("div");
+      row.className = "act";
+      const verb = document.createElement("span"); verb.className = "verb"; verb.textContent = a.type || "?";
+      const obj = document.createElement("span"); obj.className = "obj";
+      obj.textContent = [a.target, a.value].filter(Boolean).join("  ·  ");
+      const res = document.createElement("span"); res.className = "res " + resultClass(a.result); res.textContent = a.result || "";
+      row.appendChild(verb); row.appendChild(obj); row.appendChild(res);
+      acts.appendChild(row);
+    });
+    card.appendChild(acts);
+    feed.appendChild(card);
+    card.scrollIntoView({ behavior: "smooth", block: "end" });
+  }
+
+  function setRunning(on) {
+    running = on;
+    runBtn.disabled = on;
+    runBtn.textContent = on ? "Running…" : "Run";
+  }
+
+  function showError(msg) {
+    errBanner.textContent = msg;
+    errBanner.classList.add("show");
+    setTimeout(() => errBanner.classList.remove("show"), 5000);
+  }
+
+  // ---- WebSocket ----
+  let ws;
+  function connect() {
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    ws = new WebSocket(`${proto}://${location.host}/ws`);
+    ws.onmessage = (m) => handle(JSON.parse(m.data));
+    ws.onclose = () => { setPill(false, "Reconnecting…"); setTimeout(connect, 1500); };
+  }
+
+  function handle(ev) {
+    switch (ev.type) {
+      case "run_started":
+        addDivider("“" + ev.command + "”");
+        if (ev.flagged && ev.flagged.length) {
+          flag.textContent = "Heads up: this command mentions " + ev.flagged.join(", ") +
+            ". You'll be asked to confirm each risky step before it runs.";
+          flag.classList.add("show");
+        } else {
+          flag.classList.remove("show");
+        }
+        break;
+      case "step":
+        addStep(ev);
+        break;
+      case "approval_required":
+        pendingApproval = ev.id;
+        mVerb.textContent = ev.verb || "confirm";
+        mWhat.textContent = ev.summary || "";
+        overlay.classList.add("show");
+        break;
+      case "run_finished":
+        overlay.classList.remove("show");
+        setRunning(false);
+        addSystem(finishedLabel(ev.outcome));
+        break;
+      case "status":
+        addSystem(ev.message);
+        break;
+      case "error":
+        showError(ev.message);
+        setRunning(false);
+        break;
+    }
+  }
+
+  function finishedLabel(outcome) {
+    if (outcome === "done") return "✓ Done.";
+    if (outcome === "stopped") return "■ Stopped.";
+    if (outcome === "max_steps") return "Reached the step limit before finishing.";
+    if (outcome === "no_actions") return "The engine had nothing to do here.";
+    if (outcome === "brain_error") return "The OrphicOS engine couldn't be reached. Try again.";
+    return "Finished: " + outcome;
+  }
+
+  // ---- status pill ----
+  function setPill(on, text) {
+    pill.classList.toggle("on", on);
+    pill.classList.toggle("off", !on);
+    pillText.textContent = text;
+  }
+  async function pollStatus() {
+    try {
+      const r = await fetch("/api/status");
+      const s = await r.json();
+      setPill(s.connected, s.connected ? "Connected to OrphicOS brain" : "OrphicOS brain unreachable");
+    } catch (_) {
+      setPill(false, "OrphicOS brain unreachable");
+    }
+  }
+
+  // ---- actions ----
+  function send(obj) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
+
+  function submit() {
+    const text = cmd.value.trim();
+    if (!text || running) return;
+    setRunning(true);
+    send({ type: "run", command: text });
+    cmd.value = "";
+  }
+
+  runBtn.onclick = submit;
+  cmd.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+  $("stop").onclick = () => send({ type: "stop" });
+  $("mApprove").onclick = () => { send({ type: "approve", id: pendingApproval, decision: "approve" }); overlay.classList.remove("show"); };
+  $("mDeny").onclick = () => { send({ type: "approve", id: pendingApproval, decision: "deny" }); overlay.classList.remove("show"); };
+
+  connect();
+  pollStatus();
+  setInterval(pollStatus, 4000);
+})();
+</script>
+</body>
+</html>

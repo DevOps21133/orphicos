@@ -76,7 +76,26 @@ above. Tracked as release-blocking cleanup.
 Genuinely used by the client at runtime (all permissive):
   windows-use 0.8.1 MIT · pywin32 312 (PSF/BSD-style) · comtypes 1.4.16 MIT ·
   pillow 12.3.0 MIT-CMU/HPND · rapidfuzz 3.14.5 MIT · tabulate 0.10.0 MIT ·
-  httpx 0.28.1 BSD-3-Clause (client -> brain transport)
+  httpx 0.28.1 BSD-3-Clause (client -> brain transport) ·
+  fastapi 0.139.0 MIT · starlette 1.3.1 BSD-3-Clause · uvicorn 0.49.0 BSD-3-Clause
+      (the local Phase 5 shell UI — see the next section)
+
+--------------------------------------------------------------------------------
+OrphicOS shell web stack   (client — local UI; Phase 5)
+--------------------------------------------------------------------------------
+The Phase 5 shell (client/shell/) is a LOCAL web app: FastAPI + uvicorn serve a dark UI
+on 127.0.0.1 and stream each step to the browser over a WebSocket. It runs only on the
+user's machine, binds to localhost, and holds NO LLM key or provider (Rules 1 & 6) — it
+drives the same brain-less client loop the Phase 2 CLI uses. These are the same versions
+and licenses already vetted for the server below, all permissive:
+
+  fastapi     0.139.0   MIT
+  starlette   1.3.1     BSD-3-Clause   (transitive via fastapi; the ASGI framework)
+  uvicorn     0.49.0    BSD-3-Clause   (ASGI server)
+
+  Their shared transitive deps (anyio, click, h11, pydantic, sniffio, typing_extensions)
+  were already installed for the client via windows-use and are recorded in
+  client/requirements-lock.txt; their licenses appear in the server table below.
 
 --------------------------------------------------------------------------------
 Big-brain LLM provider   (server — server/brain.py ONLY; Phase 1)

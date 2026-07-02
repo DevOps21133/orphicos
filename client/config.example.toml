@@ -16,3 +16,7 @@ SERVER_BASE = "https://brain.orphicos.ai"
 # Optional client tuning (defaults shown):
 # REQUEST_TIMEOUT = 30.0   # seconds to wait for each brain decision
 # MAX_STEPS = 12           # max perceive->decide->act cycles per command
+
+# Optional OrphicOS shell UI (Phase 5) — the local dark UI, bound to localhost only:
+# SHELL_HOST = "127.0.0.1"
+# SHELL_PORT = 8700        # kept off 8000 (the brain's local dev port)

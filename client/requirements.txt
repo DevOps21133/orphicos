@@ -1,8 +1,10 @@
 # OrphicOS thin-client runtime dependencies.
 #
-# The client uses ONLY windows-use's headless Desktop (UI-tree perception + action)
-# and httpx (transport to the OrphicOS brain). It loads NO LLM provider SDK and NO
-# telemetry — the wall is enforced at runtime in client/_engine.py (CLAUDE.md Rule 1).
+# The client uses ONLY windows-use's headless Desktop (UI-tree perception + action),
+# httpx (transport to the OrphicOS brain), and FastAPI/uvicorn (the local Phase 5 shell
+# UI). It loads NO LLM provider SDK and NO telemetry — the wall is enforced at runtime
+# in client/_engine.py (CLAUDE.md Rule 1). FastAPI (MIT) and uvicorn/Starlette (BSD-3)
+# are all permissive; recorded in THIRD-PARTY-NOTICES.txt.
 #
 # ACCEPTED DEBT: windows-use 0.8.1 pulls a large transitive tree that includes
 # GPL/LGPL and provider/telemetry packages the client never loads. The exact
@@ -11,3 +13,5 @@
 
 windows-use==0.8.1
 httpx>=0.28,<1.0
+fastapi>=0.115,<1.0
+uvicorn>=0.30,<1.0
