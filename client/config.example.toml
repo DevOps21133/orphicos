@@ -1,9 +1,10 @@
-# OrphicOS client configuration. Copy to config.toml.
-# The client knows ONLY this: where the OrphicOS brain lives and how to
-# authenticate to it. No model names, no provider keys — ever.
+# OrphicOS client configuration (example).
+# Copy to client/config.toml and set SERVER_BASE.
+#
+# The client is a THIN app: it has NO brain and NO LLM API key — ever
+# (Rules 1 & 6). The only address it talks to is the OrphicOS brain below.
 
-# OrphicOS brain endpoint (local dev: http://localhost:8100)
-BRAIN_BASE = "http://localhost:8100"
+SERVER_BASE = "https://brain.orphicos.ai"
 
-# Client token issued by OrphicOS (leave empty for local dev)
-CLIENT_TOKEN = ""
+# The per-user OrphicOS token is issued at sign-in (Phase 6) and injected at
+# runtime. It is NOT stored in this example file, and it is NOT an LLM key.

@@ -1,86 +1,181 @@
-# OrphicOS Phase 0 environment check. Prints PASS/FAIL per check, exit 0 only if all pass.
-$script:failCount = 0
+#Requires -Version 5.1
+<#
+    OrphicOS - Phase 0 environment & skeleton check.
 
-function Report([string]$Name, [bool]$Ok, [string]$Detail) {
-    if ($Ok) {
-        Write-Host ("PASS  {0,-20} {1}" -f $Name, $Detail) -ForegroundColor Green
+    Prints [PASS] / [FAIL] / [INFO] per check. The SERVER_BASE reachability check
+    is EXPECTED to fail until Phase 1 hosts the brain, so it is reported as [INFO]
+    and does NOT fail this script.
+
+    Exit code: 0 if all required checks PASS, 1 otherwise.
+
+    Usage:
+        powershell -ExecutionPolicy Bypass -File scripts\check_env.ps1
+#>
+
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+$script:Failures = 0
+
+function Write-Check {
+    param(
+        [Parameter(Mandatory)] [string] $Name,
+        [Parameter(Mandatory)] [ValidateSet('PASS', 'FAIL', 'INFO')] [string] $Status,
+        [string] $Detail = ''
+    )
+    $color = @{ PASS = 'Green'; FAIL = 'Red'; INFO = 'Yellow' }[$Status]
+    Write-Host ('[{0}]' -f $Status) -ForegroundColor $color -NoNewline
+    Write-Host (' {0}' -f $Name) -NoNewline
+    if ($Detail) {
+        Write-Host ('  ->  {0}' -f $Detail) -ForegroundColor DarkGray
     } else {
-        Write-Host ("FAIL  {0,-20} {1}" -f $Name, $Detail) -ForegroundColor Red
-        $script:failCount++
+        Write-Host ''
     }
-}
-
-# Python 3.10 - 3.12
-try {
-    $pyOut = (& python --version) -join ' '
-    $m = [regex]::Match($pyOut, '(\d+)\.(\d+)\.(\d+)')
-    $ok = $m.Success -and ([int]$m.Groups[1].Value -eq 3) -and ([int]$m.Groups[2].Value -ge 10) -and ([int]$m.Groups[2].Value -le 12)
-    Report 'Python 3.10-3.12' $ok $pyOut
-} catch {
-    Report 'Python 3.10-3.12' $false 'python not found on PATH'
-}
-
-# Git
-try {
-    $gitOut = (& git --version) -join ' '
-    Report 'Git' ($gitOut -match 'git version') $gitOut
-} catch {
-    Report 'Git' $false 'git not found on PATH'
-}
-
-# GPU: RTX 5090 visible, CUDA >= 12
-try {
-    $gpuName = (& nvidia-smi --query-gpu=name --format=csv,noheader) -join '; '
-    Report 'GPU RTX 5090' ($gpuName -match '5090') $gpuName
-
-    $smiOut = (& nvidia-smi) -join "`n"
-    $cm = [regex]::Match($smiOut, 'CUDA Version:\s*(\d+)\.(\d+)')
-    $cudaOk = $cm.Success -and ([int]$cm.Groups[1].Value -ge 12)
-    if ($cm.Success) { $cudaDetail = "CUDA $($cm.Groups[1].Value).$($cm.Groups[2].Value)" } else { $cudaDetail = 'CUDA version not detected' }
-    Report 'CUDA >= 12' $cudaOk $cudaDetail
-} catch {
-    Report 'GPU RTX 5090' $false 'nvidia-smi not found on PATH'
-    Report 'CUDA >= 12' $false 'nvidia-smi not found on PATH'
-}
-
-# Linux-container path for model serving: WSL2 preferred, Docker acceptable
-$wslOk = $false
-try {
-    $wslOut = (& wsl --status) -join ' '
-    $wslOk = ($LASTEXITCODE -eq 0) -and ($wslOut.Length -gt 0)
-} catch {}
-$dockerOk = $false
-try {
-    $null = & docker --version
-    $dockerOk = ($LASTEXITCODE -eq 0)
-} catch {}
-if ($wslOk) { $containerDetail = 'WSL2 available' } elseif ($dockerOk) { $containerDetail = 'Docker available' } else { $containerDetail = 'neither WSL2 nor Docker found' }
-Report 'WSL2/Docker' ($wslOk -or $dockerOk) $containerDetail
-
-# Brain endpoint (from .env LOCAL_MODEL_BASE; expected to FAIL until Phase 1 brings the brain up)
-$envFile = Join-Path (Split-Path $PSScriptRoot -Parent) '.env'
-$modelBase = $null
-if (Test-Path $envFile) {
-    foreach ($line in Get-Content $envFile) {
-        if ($line -match '^\s*LOCAL_MODEL_BASE\s*=\s*(.+)$') { $modelBase = $Matches[1].Trim() }
-    }
-}
-if ($modelBase) {
-    try {
-        $null = Invoke-RestMethod -Uri "$modelBase/models" -TimeoutSec 5
-        Report 'Brain endpoint' $true "$modelBase responding"
-    } catch {
-        Report 'Brain endpoint' $false "$modelBase not responding (expected until Phase 1 DONE)"
-    }
-} else {
-    Report 'Brain endpoint' $false 'LOCAL_MODEL_BASE not set in .env'
+    if ($Status -eq 'FAIL') { $script:Failures++ }
 }
 
 Write-Host ''
-if ($script:failCount -eq 0) {
-    Write-Host 'All checks PASS.' -ForegroundColor Green
+Write-Host 'OrphicOS - environment & skeleton check (Phase 0)' -ForegroundColor Cyan
+Write-Host ('Repo: {0}' -f $RepoRoot) -ForegroundColor DarkGray
+Write-Host ''
+
+# --- 1. Python 3.10-3.12 ---------------------------------------------------
+$pythonOk = $false
+$pythonDetail = 'no python interpreter found (tried: python, py)'
+foreach ($exe in @('python', 'py')) {
+    if (-not (Get-Command $exe -ErrorAction SilentlyContinue)) { continue }
+    $verRaw = (& $exe --version 2>$null | Out-String).Trim()
+    if ($verRaw -match '(\d+)\.(\d+)\.(\d+)') {
+        $maj = [int]$Matches[1]; $min = [int]$Matches[2]
+        if ($maj -eq 3 -and $min -ge 10 -and $min -le 12) {
+            $pythonOk = $true
+            $pythonDetail = ('{0}  (via "{1}")' -f $verRaw, $exe)
+            break
+        }
+        $pythonDetail = ('{0} outside supported range 3.10-3.12 (via "{1}")' -f $verRaw, $exe)
+    }
+}
+Write-Check 'Python 3.10-3.12' $(if ($pythonOk) { 'PASS' } else { 'FAIL' }) $pythonDetail
+
+# --- 2. git present --------------------------------------------------------
+$gitPresent = [bool](Get-Command git -ErrorAction SilentlyContinue)
+if ($gitPresent) {
+    $gitVer = (& git --version 2>$null | Out-String).Trim()
+    Write-Check 'git present' 'PASS' $gitVer
+} else {
+    Write-Check 'git present' 'FAIL' 'git not found on PATH'
+}
+
+# --- 3. .gitignore ignores every .env --------------------------------------
+$giPath = Join-Path $RepoRoot '.gitignore'
+if (-not (Test-Path $giPath)) {
+    Write-Check '.gitignore ignores .env' 'FAIL' '.gitignore missing'
+} elseif ($gitPresent) {
+    # Authoritative: ask git itself whether representative .env paths are ignored.
+    $probes = @('server/.env', 'client/.env', '.env')
+    $notIgnored = @()
+    foreach ($p in $probes) {
+        & git -C $RepoRoot check-ignore --quiet -- $p 2>$null
+        if ($LASTEXITCODE -ne 0) { $notIgnored += $p }
+    }
+    if ($notIgnored.Count -eq 0) {
+        Write-Check '.gitignore ignores .env' 'PASS' 'git ignores server/.env, client/.env, .env'
+    } else {
+        Write-Check '.gitignore ignores .env' 'FAIL' ('not ignored: {0}' -f ($notIgnored -join ', '))
+    }
+} else {
+    $giText = Get-Content $giPath -Raw
+    if ($giText -match '(?m)^\s*\*\*/\.env\s*$' -or $giText -match '(?m)^\s*\.env\s*$') {
+        Write-Check '.gitignore ignores .env' 'PASS' 'pattern **/.env present (git not available to confirm)'
+    } else {
+        Write-Check '.gitignore ignores .env' 'FAIL' 'no .env ignore pattern found'
+    }
+}
+
+# --- 4a. no real .env files present (only .env.example is tracked) ---------
+# Scan the WHOLE repo (excluding .git internals) so a real .env anywhere is caught.
+$envFiles = @(
+    Get-ChildItem -Path $RepoRoot -Recurse -File -Force -Filter '.env' -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -eq '.env' -and $_.FullName -notmatch '\\\.git\\' }
+)
+if ($envFiles.Count -eq 0) {
+    Write-Check 'no real .env files' 'PASS' 'only .env.example is present'
+} else {
+    $names = ($envFiles | ForEach-Object { $_.FullName.Substring($RepoRoot.Length + 1) }) -join ', '
+    Write-Check 'no real .env files' 'FAIL' ('found: {0}' -f $names)
+}
+
+# --- 4b. example env carries no filled-in secret ---------------------------
+$exPath = Join-Path $RepoRoot 'server\.env.example'
+if (-not (Test-Path $exPath)) {
+    Write-Check 'server/.env.example has no secret' 'FAIL' 'server/.env.example missing'
+} else {
+    $filled = @()
+    foreach ($line in (Get-Content $exPath)) {
+        if ($line -match '^\s*(LLM_API_KEY|LLM_MODEL)\s*=\s*(\S.*)$') { $filled += $Matches[1] }
+    }
+    if ($filled.Count -eq 0) {
+        Write-Check 'server/.env.example has no secret' 'PASS' 'LLM_API_KEY / LLM_MODEL empty'
+    } else {
+        Write-Check 'server/.env.example has no secret' 'FAIL' ('non-empty: {0}' -f ($filled -join ', '))
+    }
+}
+
+# --- 5. client/server wall exists and is clean -----------------------------
+$clientDir = Join-Path $RepoRoot 'client'
+$serverDir = Join-Path $RepoRoot 'server'
+$wallOk = $true
+$wallDetail = @()
+
+if ((Test-Path $clientDir) -and (Test-Path $serverDir)) {
+    $wallDetail += 'client/ and server/ present'
+} else {
+    $wallOk = $false
+    $wallDetail += 'missing client/ or server/'
+}
+
+# Rule 1/6: no LLM key material anywhere under client/.
+if (Test-Path $clientDir) {
+    $clientFiles = Get-ChildItem -Path $clientDir -Recurse -File -Force -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -notmatch '\\\.git\\' }
+    $leaks = @()
+    foreach ($f in $clientFiles) {
+        $hit = Select-String -Path $f.FullName -Pattern 'LLM_API_KEY\s*=\s*\S', 'sk-[A-Za-z0-9]{16,}' -ErrorAction SilentlyContinue
+        if ($hit) { $leaks += $f.FullName.Substring($RepoRoot.Length + 1) }
+    }
+    if ($leaks.Count -eq 0) {
+        $wallDetail += 'no LLM key material under client/'
+    } else {
+        $wallOk = $false
+        $wallDetail += ('key material leaked into client/: {0}' -f (($leaks | Select-Object -Unique) -join ', '))
+    }
+}
+Write-Check 'client/server wall clean' $(if ($wallOk) { 'PASS' } else { 'FAIL' }) ($wallDetail -join '; ')
+
+# --- 6. SERVER_BASE reachability (expected FAIL until Phase 1) --------------
+$cfg = Join-Path $RepoRoot 'client\config.toml'
+if (-not (Test-Path $cfg)) { $cfg = Join-Path $RepoRoot 'client\config.example.toml' }
+$serverBase = $null
+if (Test-Path $cfg) {
+    foreach ($line in (Get-Content $cfg)) {
+        if ($line -match '^\s*SERVER_BASE\s*=\s*"?([^"#]+?)"?\s*$') { $serverBase = $Matches[1].Trim() }
+    }
+}
+if (-not $serverBase) {
+    Write-Check 'SERVER_BASE reachable' 'INFO' 'SERVER_BASE not set yet (expected until Phase 1)'
+} else {
+    try {
+        $resp = Invoke-WebRequest -Uri $serverBase -Method Head -TimeoutSec 4 -UseBasicParsing -ErrorAction Stop
+        Write-Check 'SERVER_BASE reachable' 'PASS' ('{0} -> HTTP {1}' -f $serverBase, [int]$resp.StatusCode)
+    } catch {
+        Write-Check 'SERVER_BASE reachable' 'INFO' ('{0} unreachable (expected FAIL until Phase 1)' -f $serverBase)
+    }
+}
+
+# --- summary ---------------------------------------------------------------
+Write-Host ''
+if ($script:Failures -eq 0) {
+    Write-Host 'RESULT: all required checks PASS.' -ForegroundColor Green
     exit 0
 } else {
-    Write-Host "$script:failCount check(s) FAILED." -ForegroundColor Red
+    Write-Host ('RESULT: {0} required check(s) FAILED.' -f $script:Failures) -ForegroundColor Red
     exit 1
 }

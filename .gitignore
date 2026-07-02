@@ -1,21 +1,19 @@
-﻿# Secrets - every .env at any depth (server/.env holds the provider key)
-.env
+# Secrets — never commit any real .env
+# (the LLM_API_KEY lives ONLY in server/.env, server-side — Rules 1 & 6).
+# .env.example files are intentionally tracked and are NOT matched by this rule.
 **/.env
 
-# Client local config (copied from client/config.example.toml)
-client/config.toml
-
-# Vendored engine (cloned in Phase 1, pinned in docs/engine-version.txt)
-engine/UFO/
-
 # Python
-.venv/
 __pycache__/
-*.pyc
+*.py[cod]
 
-# Model weights
-models/
+# Virtual environments (Phase 2 creates ./.venv on the client)
+.venv/
+venv/
 
 # Logs
 *.log
-logs/
+
+# Model weights / caches / engine logs
+/models
+engine/*/logs

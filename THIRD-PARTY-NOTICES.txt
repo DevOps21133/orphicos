@@ -1,63 +1,53 @@
-THIRD-PARTY NOTICES
-===================
+OrphicOS — Third-Party Notices
+==============================
 
-OrphicOS incorporates or depends on the third-party components listed below.
-Every dependency added to this project must be recorded here, with its
-license, in the same commit that adds it.
+Every third-party dependency and its license is recorded here, per the OrphicOS
+build rules: permissive licenses ONLY (MIT / Apache-2.0 / BSD / CC-BY); never
+AGPL / SSPL / BSL. Each dependency is added to this file in the same commit that
+introduces it.
 
--------------------------------------------------------------------------------
-1. Microsoft UFO (UFO2 - Desktop AgentOS)
--------------------------------------------------------------------------------
-Source:  https://github.com/microsoft/UFO
-Usage:   Vendored, unmodified, at engine/UFO (not redistributed in this repo;
-         pinned commit recorded in docs/engine-version.txt)
-License: MIT
+--------------------------------------------------------------------------------
+Windows-Use   (client — perception + action engine; Phase 2)
+--------------------------------------------------------------------------------
+Project:    Windows-Use  (pip: windows-use)
+Source:     https://github.com/CursorTouch/Windows-Use
+Author:     Jeomon George / CursorTouch
+License:    MIT   (verified from the repository LICENSE file, 2026-07-02)
+Copyright:  Copyright (c) 2025 CursorTouch
 
     MIT License
 
-    Copyright (c) Microsoft Corporation.
-
     Permission is hereby granted, free of charge, to any person obtaining a copy
-    of this software and associated documentation files (the "Software"), to deal
-    in the Software without restriction, including without limitation the rights
-    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-    copies of the Software, and to permit persons to whom the Software is
+    of this software and associated documentation files (the "Software"), to
+    deal in the Software without restriction, including without limitation the
+    rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+    sell copies of the Software, and to permit persons to whom the Software is
     furnished to do so, subject to the following conditions:
 
-    The above copyright notice and this permission notice shall be included in all
-    copies or substantial portions of the Software.
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
 
     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
     IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
     FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
     AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-    SOFTWARE.
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+    IN THE SOFTWARE.
 
--------------------------------------------------------------------------------
-2. UI-TARS-1.5-7B
--------------------------------------------------------------------------------
-Source:  https://github.com/bytedance/UI-TARS
-Weights: https://huggingface.co/ByteDance-Seed/UI-TARS-1.5-7B
-Usage:   The local brain - GUI-grounding model served via vLLM in WSL2
-         (Phase 1); weights downloaded once from Hugging Face, run locally.
-License: Apache-2.0 (code); model weights Apache-2.0 per the Hugging Face
-         model card - verify on first download and paste the full license
-         text here.
+--------------------------------------------------------------------------------
+Big-brain LLM provider   (server — server/brain.py ONLY; Phase 1)   [PLACEHOLDER]
+--------------------------------------------------------------------------------
+Project:    <recorded in Phase 1 when server/brain.py is wired>
+Source:     <provider SDK repository>
+License:    <verify before adding — must be MIT / Apache-2.0 / BSD>
+Note:       The provider is an internal detail (Rule 2). Its name appears here
+            and in server/brain.py ONLY — never in any user-facing string, UI,
+            log, hostname, error, README, or marketing.
 
--------------------------------------------------------------------------------
-3. vLLM
--------------------------------------------------------------------------------
-Source:  https://github.com/vllm-project/vllm
-Usage:   Serves the local brain model inside WSL2 (installed in a WSL venv,
-         not redistributed).
-License: Apache-2.0
-
--------------------------------------------------------------------------------
-4. Speech-to-text model (placeholder - chosen in Phase 5)
--------------------------------------------------------------------------------
-Candidates: NVIDIA Parakeet TDT (primary, weights CC-BY-4.0) or
-            faster-whisper large-v3-turbo (fallback). Record the chosen
-            model, its exact license, and the full license text here in the
-            same commit that adds it.
+--------------------------------------------------------------------------------
+Local STT model / tooling   (client — speech-to-text; Phase 3)      [PLACEHOLDER]
+--------------------------------------------------------------------------------
+Project:    <faster-whisper or Parakeet, plus sounddevice — recorded in Phase 3>
+Source:     <repository>
+License:    <verify before adding — must be MIT / Apache-2.0 / BSD>
