@@ -1,0 +1,166 @@
+"""Unit tests for client.act.actor.Actor — the action executor's mapping logic.
+
+No live desktop: a FakeDesktop records calls; the one path that reaches real
+windows-use (the focused-type SendKeys fallback) is patched so no keystrokes fire.
+"""
+from __future__ import annotations
+
+import unittest
+from unittest.mock import patch
+
+from client.act import ActionError, Actor
+from client.tests.fakes import FakeDesktop
+
+# The client's side of the server action contract (server/brain.py ALLOWED_ACTIONS).
+# Kept explicit here so a drift between server verbs and client handlers fails a test.
+EXPECTED_VERBS = (
+    "launch", "click", "double_click", "right_click",
+    "type", "press", "scroll", "focus_window", "wait",
+)
+
+
+class LabelResolutionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.desktop = FakeDesktop(node_names=["Save", "Save As", "Cancel", "Text editor"])
+        self.actor = Actor(self.desktop)
+
+    def test_exact_case_insensitive_wins_over_prefix(self):
+        # "Save" must resolve to index 0 (exact), NOT "Save As" (a prefix match).
+        self.assertEqual(self.actor._label_for("save"), 0)
+
+    def test_prefix_match(self):
+        self.assertEqual(self.actor._label_for("Save A"), 1)
+
+    def test_substring_match(self):
+        self.assertEqual(self.actor._label_for("editor"), 3)
+
+    def test_digit_index(self):
+        self.assertEqual(self.actor._label_for("2"), 2)
+
+    def test_out_of_range_digit_falls_through_to_no_match(self):
+        # "9" is not a valid index and matches no name -> None.
+        self.assertIsNone(self.actor._label_for("9"))
+
+    def test_unknown_name_is_none(self):
+        self.assertIsNone(self.actor._label_for("nonexistent-element"))
+
+    def test_empty_tree_is_none(self):
+        empty = Actor(FakeDesktop(node_names=[]))
+        self.assertIsNone(empty._label_for("Save"))
+
+
+class ResolveLocTests(unittest.TestCase):
+    def test_coords_used_directly_and_int_cast(self):
+        actor = Actor(FakeDesktop(node_names=[]))
+        loc = actor._resolve_loc({"type": "click", "coords": [12.5, 34.9]})
+        self.assertEqual(loc, (12, 34))  # truncated to int, no label lookup needed
+
+    def test_target_selector_resolves_via_label(self):
+        desktop = FakeDesktop(node_names=["Save", "Cancel"])
+        actor = Actor(desktop)
+        loc = actor._resolve_loc({"type": "click", "target_selector": "Cancel"})
+        self.assertEqual(loc, (101, 201))  # label 1 -> (100+1, 200+1)
+
+    def test_unresolvable_selector_raises(self):
+        actor = Actor(FakeDesktop(node_names=["Save"]))
+        with self.assertRaises(ActionError):
+            actor._resolve_loc({"type": "click", "target_selector": "Ghost"})
+
+    def test_no_target_and_no_coords_returns_none(self):
+        actor = Actor(FakeDesktop(node_names=["Save"]))
+        self.assertIsNone(actor._resolve_loc({"type": "scroll"}))
+
+
+class ActionDispatchTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.desktop = FakeDesktop(node_names=["Save", "Cancel", "Text editor"])
+        self.actor = Actor(self.desktop)
+
+    def test_every_allowlisted_verb_has_a_handler(self):
+        for verb in EXPECTED_VERBS:
+            self.assertTrue(hasattr(self.actor, f"_do_{verb}"),
+                            f"Actor is missing a handler for allowlisted verb {verb!r}")
+
+    def test_unknown_verb_raises(self):
+        with self.assertRaises(ActionError):
+            self.actor.execute({"type": "teleport"})
+
+    def test_click_is_single_left_click(self):
+        self.actor.execute({"type": "click", "target_selector": "Save"})
+        self.assertIn(("click", (100, 200), "left", 1), self.desktop.calls)
+
+    def test_double_click(self):
+        self.actor.execute({"type": "double_click", "target_selector": "Save"})
+        self.assertIn(("click", (100, 200), "left", 2), self.desktop.calls)
+
+    def test_right_click(self):
+        self.actor.execute({"type": "right_click", "target_selector": "Save"})
+        self.assertIn(("click", (100, 200), "right", 1), self.desktop.calls)
+
+    def test_type_into_resolved_target(self):
+        self.actor.execute({"type": "type", "target_selector": "Text editor", "value": "hello"})
+        self.assertIn(("type", (102, 202), "hello"), self.desktop.calls)
+
+    def test_type_into_focus_uses_sendkeys_fallback(self):
+        # No target -> type into whatever has focus, via uia.SendKeys (patched: no real keys).
+        with patch("client.act.actor.uia.SendKeys") as send:
+            result = self.actor.execute({"type": "type", "value": "focused text"})
+        send.assert_called_once()
+        # windows-use is never asked to click/type when there's no target.
+        self.assertFalse(any(c[0] == "type" for c in self.desktop.calls))
+        self.assertEqual(result, "typed into focused control")
+
+    def test_press_dispatches_shortcut(self):
+        self.actor.execute({"type": "press", "value": "ctrl+s"})
+        self.assertIn(("shortcut", "ctrl+s"), self.desktop.calls)
+
+    def test_press_without_value_raises(self):
+        with self.assertRaises(ActionError):
+            self.actor.execute({"type": "press", "value": None})
+
+    def test_launch_uses_value(self):
+        self.actor.execute({"type": "launch", "value": "notepad"})
+        self.assertIn(("app", "launch", "notepad"), self.desktop.calls)
+
+    def test_launch_falls_back_to_target_selector(self):
+        self.actor.execute({"type": "launch", "target_selector": "Excel"})
+        self.assertIn(("app", "launch", "Excel"), self.desktop.calls)
+
+    def test_launch_without_name_raises(self):
+        with self.assertRaises(ActionError):
+            self.actor.execute({"type": "launch"})
+
+    def test_focus_window_switches(self):
+        self.actor.execute({"type": "focus_window", "value": "Book1 - Excel"})
+        self.assertIn(("app", "switch", "Book1 - Excel"), self.desktop.calls)
+
+
+class ScrollAndWaitTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.desktop = FakeDesktop(node_names=[])
+        self.actor = Actor(self.desktop)
+
+    def test_scroll_up_is_vertical(self):
+        self.actor.execute({"type": "scroll", "value": "up"})
+        self.assertIn(("scroll", None, "vertical", "up", 3), self.desktop.calls)
+
+    def test_scroll_left_is_horizontal(self):
+        self.actor.execute({"type": "scroll", "value": "left"})
+        self.assertIn(("scroll", None, "horizontal", "left", 3), self.desktop.calls)
+
+    def test_scroll_unknown_direction_defaults_down(self):
+        self.actor.execute({"type": "scroll", "value": "sideways"})
+        self.assertIn(("scroll", None, "vertical", "down", 3), self.desktop.calls)
+
+    def test_wait_clamps_high(self):
+        self.assertEqual(self.actor.execute({"type": "wait", "value": "20"}), "waited 10s")
+
+    def test_wait_clamps_negative(self):
+        self.assertEqual(self.actor.execute({"type": "wait", "value": "-5"}), "waited 0s")
+
+    def test_wait_non_numeric_defaults_to_one(self):
+        self.assertEqual(self.actor.execute({"type": "wait", "value": "soon"}), "waited 1s")
+
+
+if __name__ == "__main__":
+    unittest.main()
