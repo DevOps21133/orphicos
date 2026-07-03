@@ -41,6 +41,8 @@ Return ONLY a JSON object (no prose, no markdown) with this exact shape:
   ],
   "done": <true if the COMMAND will be fully satisfied once the actions in THIS response finish (an empty
            "actions" array means it is already satisfied), else false>,
+  "need_screenshot": <true ONLY when you cannot plan from this tree and must SEE the screen — your next
+                      call will then include a screenshot; otherwise false>,
   "reasoning_summary": "<one short sentence; never echo screen contents>"
 }
 
@@ -48,6 +50,11 @@ Rules:
 - Allowed "type" verbs: launch, click, double_click, right_click, type, press, scroll, focus_window, wait, screenshot.
 - PREFER acting on named tree elements: put the element's Name in "target_selector" and leave "coords" null.
 - Use "coords" ONLY when a screenshot is provided and no named element fits (canvas/custom-drawn UI).
+- A provided screenshot is annotated with numbered boxes; each number IS an element id from the tree above.
+  Prefer that id or the element's name in "target_selector"; use raw "coords" only for a spot with no box.
+- Set "need_screenshot": true and END the plan (done=false) when the tree cannot show what you must know —
+  e.g. to read canvas/custom-drawn content or visually verify a result. Never request one when the tree
+  already answers the question: screenshots cost latency.
 - "value" holds: the app name for launch; the text for type; the key chord for press (e.g. "ctrl+s", "enter");
   the direction for scroll ("up"/"down"); the number of seconds for wait; or, for screenshot, the absolute save
   path (null saves to the user's Pictures\\Screenshots folder).
@@ -192,7 +199,8 @@ def _build_messages(command: str, ui_tree: str, state: dict | None, screenshot: 
     if screenshot:
         content: Any = [
             {"type": "text", "text": text_block +
-             "\nA screenshot is attached because the tree was insufficient; you may use its coords."},
+             "\nA screenshot is attached (the tree was insufficient, or you requested it); "
+             "numbered boxes on it are element ids from the tree."},
             {"type": "image_url", "image_url": {"url": _as_data_uri(screenshot)}},
         ]
     else:
@@ -300,6 +308,7 @@ def _parse_decision(raw: str, allow_coords: bool) -> dict:
     return {
         "actions": actions,
         "done": bool(data.get("done", False)),
+        "need_screenshot": bool(data.get("need_screenshot", False)),
         "reasoning_summary": str(data.get("reasoning_summary", ""))[:500],
     }
 
@@ -309,7 +318,7 @@ def decide(command: str, ui_tree: str, state: dict | None = None,
     """Provider-neutral decision entry point.
 
     Returns (decision, usage):
-      decision = {"actions": [...], "done": bool, "reasoning_summary": str}
+      decision = {"actions": [...], "done": bool, "need_screenshot": bool, "reasoning_summary": str}
       usage    = {"prompt_tokens", "completion_tokens", "total_tokens", "latency_ms"}
     """
     client = _get_client()

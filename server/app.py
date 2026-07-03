@@ -84,6 +84,9 @@ class CommandRequest(BaseModel):
 class CommandResponse(BaseModel):
     actions: list[Action]
     done: bool
+    # The brain could not decide from the tree alone: the client should include a
+    # screenshot with its NEXT request (Rule 5's brain-requested vision path).
+    need_screenshot: bool = False
     reasoning_summary: str
     # Latency metadata for the client's per-step breakdown (numbers only — never
     # screen data, Rule 4): llm_ms = provider call, server_ms = total server time.

@@ -5,7 +5,8 @@ tree, send it to the OrphicOS brain, execute the WHOLE ordered plan it returns
 locally (no brain call between actions — round trips are the latency budget), and
 loop until the brain reports the command done (or we hit max_steps). The brain is
 only re-consulted when the plan is exhausted or an action fails. The screenshot fallback
-fires only when the tree yields no interactive elements (Rule 5).
+fires only when the tree is insufficient for the active window, or when the brain's
+previous decision asked to see the screen (need_screenshot) — Rule 5.
 """
 from __future__ import annotations
 
@@ -56,13 +57,16 @@ def run_command(
     history: list[dict] = []
     consecutive_empty = 0
     last_failure: dict | None = None  # a mid-batch ActionError, reported to the brain once
+    force_screenshot = False  # the brain's previous decision set need_screenshot
 
     for step in range(1, max_steps + 1):
         if should_stop is not None and should_stop():
             return "stopped"
         t_perceive = perf_counter()
         perception = perceiver.perceive()
-        screenshot = perceiver.capture_screenshot() if perception.is_empty else None
+        screenshot = (perceiver.capture_screenshot()
+                      if (perception.is_empty or force_screenshot) else None)
+        force_screenshot = False
         perceive_ms = int((perf_counter() - t_perceive) * 1000)
         state = {"steps": history[-5:]}  # small; the server also truncates state
         if last_failure is not None:
@@ -86,6 +90,7 @@ def run_command(
 
         actions = decision.get("actions") or []
         summary = decision.get("reasoning_summary", "")
+        force_screenshot = bool(decision.get("need_screenshot"))
 
         # Per-step latency breakdown (metadata only — never screen data, Rule 4):
         # perceive = UIA read+serialize here; decide = full round trip; brain/server

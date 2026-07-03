@@ -5,6 +5,7 @@ serialize_tree / Perceiver code under test is the genuine product code.
 """
 from __future__ import annotations
 
+import base64
 import unittest
 
 from client.perceive import Perceiver
@@ -133,6 +134,59 @@ class PerceiverTest(unittest.TestCase):
         desktop = FakeDesktop(node_names=["Save"], active_window="App")
         p = Perceiver(desktop).perceive()
         self.assertNotIn("SCROLLABLE", p.ui_tree)
+
+
+class InsufficiencyTest(unittest.TestCase):
+    """Canvas/DirectX apps expose only their titlebar buttons (or nothing): the
+    vision fallback must fire even though the tree is technically non-empty."""
+
+    def test_chrome_only_tree_is_insufficient(self) -> None:
+        desktop = FakeDesktop(node_names=["Minimize", "Maximize", "Close"],
+                              active_window="Game")
+        self.assertTrue(Perceiver(desktop).perceive().is_empty)
+
+    def test_foreign_window_rows_are_not_content(self) -> None:
+        # The taskbar is always present; its rows must not mask an unreadable app.
+        desktop = FakeDesktop(node_names=[], active_window="Game")
+        desktop.desktop_state.tree_state.interactive_nodes = [
+            n("Start", win="Taskbar"), n("Search", win="Taskbar")]
+        self.assertTrue(Perceiver(desktop).perceive().is_empty)
+
+    def test_taskbar_rows_count_when_taskbar_is_active(self) -> None:
+        # Plain desktop: the taskbar IS the active window, its rows are content.
+        desktop = FakeDesktop(node_names=["Start", "Search"], active_window="Taskbar")
+        self.assertFalse(Perceiver(desktop).perceive().is_empty)
+
+    def test_unnamed_node_with_metadata_is_content(self) -> None:
+        desktop = FakeDesktop(node_names=[], active_window="App")
+        desktop.desktop_state.tree_state.interactive_nodes = [
+            n("", "EditControl", win="App", meta={"has_focused": True})]
+        self.assertFalse(Perceiver(desktop).perceive().is_empty)
+
+
+class CaptureScreenshotTest(unittest.TestCase):
+    def test_annotated_when_tree_has_nodes(self) -> None:
+        desktop = FakeDesktop(node_names=["Close"], active_window="Game")
+        out = Perceiver(desktop).capture_screenshot()
+        self.assertEqual(base64.b64decode(out), b"\x89PNG-fake")
+        self.assertIn(("get_annotated_screenshot", 1), desktop.calls)
+
+    def test_plain_when_tree_has_no_nodes(self) -> None:
+        desktop = FakeDesktop(node_names=[], active_window="Game")
+        out = Perceiver(desktop).capture_screenshot()
+        self.assertEqual(base64.b64decode(out), b"\x89PNG-fake")
+        self.assertNotIn("get_annotated_screenshot",
+                         [c[0] for c in desktop.calls])
+
+    def test_annotation_failure_falls_back_to_plain(self) -> None:
+        desktop = FakeDesktop(node_names=["Close"], active_window="Game")
+
+        def boom(**_kwargs):
+            raise RuntimeError("draw failed")
+
+        desktop.get_annotated_screenshot = boom
+        out = Perceiver(desktop).capture_screenshot()
+        self.assertEqual(base64.b64decode(out), b"\x89PNG-fake")
 
 
 if __name__ == "__main__":

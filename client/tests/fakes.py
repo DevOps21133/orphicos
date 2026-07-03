@@ -58,7 +58,10 @@ class FakeDesktop:
                  tree_status: bool = True, screenshot: bytes = b"\x89PNG-fake",
                  raise_on_coords: Exception | None = None,
                  scrollable_nodes: list[FakeNode] | None = None) -> None:
-        nodes = [FakeNode(n) for n in (node_names or [])]
+        # Nodes belong to the active window, mirroring a real snapshot — the
+        # perceiver treats foreign-window rows (e.g. taskbar) as non-content.
+        self._window_name = active_window or "Test Window"
+        nodes = [FakeNode(n, window_name=self._window_name) for n in (node_names or [])]
         self._tree = FakeTreeState(nodes, status=tree_status, scrollable_nodes=scrollable_nodes)
         win = FakeWindow(active_window) if active_window else None
         self.desktop_state = FakeDesktopState(self._tree, win)
@@ -75,10 +78,15 @@ class FakeDesktop:
 
     def set_nodes(self, node_names: list[str]) -> None:
         """Simulate a screen change: replace the interactive nodes of the snapshot."""
-        self._tree.interactive_nodes = [FakeNode(n) for n in node_names]
+        self._tree.interactive_nodes = [FakeNode(n, window_name=self._window_name)
+                                        for n in node_names]
 
     def get_screenshot(self, as_bytes: bool = False):
         return self._screenshot if as_bytes else "<screenshot>"
+
+    def get_annotated_screenshot(self, nodes=None, as_bytes: bool = False):
+        self.calls.append(("get_annotated_screenshot", len(nodes or [])))
+        return self._screenshot if as_bytes else "<annotated>"
 
     # --- element resolution (used by Actor) --------------------------------
     def get_coordinates_from_label(self, label: int) -> tuple[int, int]:

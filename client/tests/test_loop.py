@@ -279,6 +279,27 @@ class PerceptionAndStateTests(unittest.TestCase):
         run_command("cmd", full, brain, 5, lambda e: None)
         self.assertIsNone(brain.seen[0]["screenshot"])
 
+    def test_chrome_only_tree_triggers_vision(self):
+        # A canvas app exposing only its titlebar buttons is unreadable: fallback fires.
+        desktop = FakeDesktop(node_names=["Minimize", "Maximize", "Close"],
+                              active_window="Game")
+        brain = FakeBrain([_decision([WAIT0], done=True)])
+        run_command("cmd", desktop, brain, 5, lambda e: None)
+        self.assertIsNotNone(brain.seen[0]["screenshot"])
+
+    def test_brain_requested_screenshot_arrives_on_next_call(self):
+        # need_screenshot=true in a decision makes the NEXT request carry a shot,
+        # and only that one — the flag does not stick.
+        desktop = FakeDesktop(node_names=["Save"], active_window="App")
+        first = _decision([WAIT0], done=False)
+        first["need_screenshot"] = True
+        brain = FakeBrain([first, _decision([WAIT0], done=False),
+                           _decision([], done=True)])
+        run_command("cmd", desktop, brain, 5, lambda e: None)
+        self.assertIsNone(brain.seen[0]["screenshot"])
+        self.assertIsNotNone(brain.seen[1]["screenshot"])
+        self.assertIsNone(brain.seen[2]["screenshot"])
+
     def test_event_shape(self):
         desktop = FakeDesktop(node_names=["Save"], active_window="App")
         brain = FakeBrain([_decision([WAIT0], done=True, summary="did it")])

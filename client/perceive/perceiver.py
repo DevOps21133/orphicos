@@ -1,8 +1,10 @@
 """Read the live Windows screen, tree-first (CLAUDE.md Rule 5).
 
 Primary perception is the Windows UI Automation tree via windows-use's headless
-`Desktop` (no LLM, no Agent). A screenshot is captured ONLY when the tree yields no
-interactive elements (canvas / DirectX / custom-drawn apps) — the vision fallback.
+`Desktop` (no LLM, no Agent). A screenshot is captured ONLY when the tree is
+insufficient for the active window (no elements, or window chrome only — canvas /
+DirectX / custom-drawn apps) or when the brain explicitly asked to see the screen
+(`need_screenshot`) — the vision fallback.
 
 The Perceiver holds the shared `Desktop` so the Actor can resolve element ids to
 live coordinates from the SAME snapshot this Perceiver produced.
@@ -30,7 +32,7 @@ MAX_SCROLLABLE_ELEMENTS = 8
 @dataclass
 class Perception:
     ui_tree: str   # compact table sent to the brain (id|type|name|meta)
-    is_empty: bool  # True when no interactive elements were found -> trigger vision fallback
+    is_empty: bool  # True when the tree is insufficient for the active window -> vision fallback
 
 
 def _clean(text: str) -> str:
@@ -129,6 +131,34 @@ def serialize_scrollables(nodes: list) -> str:
          "# type|name|scrolled"] + rows)
 
 
+# Bare window-chrome names: when the active window's OWN rows are only these, the
+# app paints its content itself (canvas/DirectX/custom-drawn) and the tree gives
+# the brain nothing to act on — the vision fallback must fire (Rule 5).
+_CHROME_NAMES = frozenset(
+    {"minimize", "maximize", "restore", "close", "system", "system menu bar"})
+
+
+def tree_insufficient(active_window: str, nodes: list) -> bool:
+    """True when the tree carries no actionable content for the ACTIVE window.
+
+    Foreign-window rows (the taskbar is always present) do not count as content —
+    they would mask an unreadable foreground app. A row counts as content when it
+    has a non-chrome name, or no name but real metadata (the same signal rule the
+    serializer uses to keep a row).
+    """
+    active = _clean(active_window).lower()
+    for node in nodes:
+        win = _clean(getattr(node, "window_name", "") or "").lower()
+        if win and win != active:
+            continue
+        name = _clean(getattr(node, "name", "") or "").lower()
+        if name and name not in _CHROME_NAMES:
+            return False
+        if not name and _meta_str(getattr(node, "metadata", None)):
+            return False
+    return True
+
+
 class Perceiver:
     def __init__(self, desktop: Desktop) -> None:
         self._desktop = desktop
@@ -143,9 +173,24 @@ class Perceiver:
         scroll_block = serialize_scrollables(getattr(tree, "scrollable_nodes", None) or [])
         if scroll_block:
             ui_tree = f"{ui_tree}\n{scroll_block}"
-        return Perception(ui_tree=ui_tree, is_empty=(not tree.status) or (not nodes))
+        insufficient = (not tree.status) or tree_insufficient(active, nodes)
+        return Perception(ui_tree=ui_tree, is_empty=insufficient)
 
     def capture_screenshot(self) -> str:
-        """Base64 PNG of the screen — sent only on the tree-insufficient fallback (Rule 5)."""
-        png = self._desktop.get_screenshot(as_bytes=True)
+        """Base64 PNG of the screen — sent only on the vision fallback (Rule 5).
+
+        When the snapshot has interactive elements, the shot is annotated with
+        numbered boxes whose labels ARE the tree ids, so the brain can keep
+        answering with ids/names instead of raw coordinates.
+        """
+        state = getattr(self._desktop, "desktop_state", None)
+        nodes = state.tree_state.interactive_nodes if state and state.tree_state else []
+        png = None
+        if nodes:
+            try:
+                png = self._desktop.get_annotated_screenshot(nodes=nodes, as_bytes=True)
+            except Exception:
+                png = None  # annotation is best-effort; the plain screen still helps
+        if png is None:
+            png = self._desktop.get_screenshot(as_bytes=True)
         return base64.b64encode(png).decode("ascii")
