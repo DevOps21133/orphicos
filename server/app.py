@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 # Load server-only secrets (LLM_API_KEY etc.) from server/.env before serving.
 load_dotenv(Path(__file__).with_name(".env"))
 
-from server import auth, brain  # noqa: E402 - must follow load_dotenv
+from server import accounts, auth, brain  # noqa: E402 - must follow load_dotenv
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 # Keep the provider host and any request bodies OUT of our logs (Rules 2 & 4):
@@ -84,6 +84,41 @@ class CommandResponse(BaseModel):
     actions: list[Action]
     done: bool
     reasoning_summary: str
+
+
+class Credentials(BaseModel):
+    email: str = Field(max_length=254)
+    password: str = Field(max_length=1024)
+
+
+class AuthResponse(BaseModel):
+    token: str
+    user_id: str
+
+
+@app.post("/auth/register", response_model=AuthResponse, status_code=201)
+async def register(creds: Credentials) -> AuthResponse:
+    # Never log the email/password/token — metadata-only logging throughout.
+    problem = accounts.validate_new_credentials(creds.email, creds.password)
+    if problem:
+        raise HTTPException(status_code=422, detail=problem)
+    try:
+        token = accounts.register(creds.email, creds.password)
+    except accounts.EmailTaken as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    log.info("account registered")
+    return AuthResponse(token=token, user_id=accounts.normalize_email(creds.email))
+
+
+@app.post("/auth/login", response_model=AuthResponse)
+async def login(creds: Credentials) -> AuthResponse:
+    try:
+        token = accounts.login(creds.email, creds.password)
+    except accounts.LockedOut as e:
+        raise HTTPException(status_code=429, detail=str(e))
+    except accounts.InvalidCredentials as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    return AuthResponse(token=token, user_id=accounts.normalize_email(creds.email))
 
 
 async def current_user(authorization: str = Header(default="")) -> str:
