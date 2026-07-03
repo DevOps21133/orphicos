@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Privacy Policy — OrphicOS</title>
+<meta name="description" content="How OrphicOS processes your data: what we receive, what we never store, and your rights." />
+<link rel="icon" href="assets/favicon.ico" sizes="16x16 32x32 48x48" />
+<link rel="icon" type="image/png" href="assets/favicon.png" />
+<link href="assets/fonts/fonts.css" rel="stylesheet" />
+<link href="legal.css" rel="stylesheet" />
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="/" class="brand">Orphic<span>OS</span></a>
+    <a href="/" class="back">← Back</a>
+  </div>
+</header>
+
+<main class="wrap">
+  <span class="eyebrow">Your data</span>
+  <h1>Privacy Policy</h1>
+  <p class="updated">Last updated: 3 July 2026</p>
+
+  <h2>The short version</h2>
+  <p>To carry out a command, OrphicOS sends your command and a compact, text-based map of your current
+  window to OrphicOS servers, where the next action is decided. That screen data is held in memory
+  for the single decision and then discarded — <strong>it is never written to disk, never logged, and
+  never stored.</strong> Voice audio never leaves your machine at all: it is transcribed on your device,
+  and only the resulting text is sent, after you have read and confirmed it.</p>
+
+  <h2>1. Who is responsible</h2>
+  <p>The controller for data processing described here is the operator of OrphicOS, reachable at
+  <a href="mailto:hello@orphicos.app">hello@orphicos.app</a>. Full contact details are on the
+  <a href="/imprint.html">imprint</a> page.</p>
+
+  <h2>2. What we process, and why</h2>
+  <p><strong>Account data.</strong> When you register we store your email address and a salted,
+  one-way hash of your password (we cannot read your password). Legal basis: performance of a
+  contract (Art. 6(1)(b) GDPR). Kept until you delete your account.</p>
+  <p><strong>Commands and screen data.</strong> When you submit a command, the app sends the command
+  text and a compact description of your active window (element names, roles and states — not a
+  recording of your screen) to OrphicOS servers, where the next action for your machine is decided.
+  In rare cases where that description is insufficient, a single screenshot of the current screen is
+  sent for the same purpose. Legal basis: performance of a contract (Art. 6(1)(b) GDPR).
+  <strong>Retention: none.</strong> Screen data and screenshots exist in server memory only for the
+  duration of the individual decision and are then discarded.</p>
+  <p><strong>Voice.</strong> Audio from your microphone is transcribed into text locally on your
+  device. The audio itself is never transmitted anywhere. The transcribed text is only sent if you
+  confirm it.</p>
+  <p><strong>Usage metadata.</strong> We record technical metadata about requests — timestamps,
+  action types, latency and volume counters per account — to operate, meter and secure the service.
+  This metadata contains no screen contents. Legal basis: performance of a contract and legitimate
+  interest in service security (Art. 6(1)(b) and (f) GDPR).</p>
+  <p><strong>Server logs.</strong> Our web servers are configured not to keep access logs for
+  application traffic. Standard, short-lived technical logs may exist for security and fault
+  diagnosis (Art. 6(1)(f) GDPR).</p>
+
+  <h2>3. What we do not do</h2>
+  <ul>
+    <li>We do not store your screen data, screenshots, or the contents of your files.</li>
+    <li>We do not sell or share personal data with advertisers.</li>
+    <li>We do not use your data to train AI models.</li>
+    <li>This website sets no cookies and uses no analytics or tracking of any kind.</li>
+    <li>All fonts and assets on this site are served from our own servers — no third-party requests.</li>
+  </ul>
+
+  <h2>4. Recipients and transfers</h2>
+  <p>We use hosting infrastructure providers to run OrphicOS servers, and specialised AI
+  infrastructure subprocessors to compute the decision for each command. These providers process
+  data only as needed to provide the service and are bound by data-processing agreements. Some
+  subprocessors may process data in the United States; where that is the case, transfers rely on
+  recognised safeguards under Chapter V GDPR. All transmission is encrypted in transit (TLS).</p>
+
+  <h2>5. Your rights</h2>
+  <p>Under the GDPR you have the right to access, rectification, erasure, restriction of processing,
+  data portability, and objection to processing based on legitimate interests, as well as the right
+  to lodge a complaint with a supervisory authority. To exercise any of these rights — including
+  deleting your account and all associated data — email
+  <a href="mailto:hello@orphicos.app">hello@orphicos.app</a>.</p>
+
+  <h2>6. Security</h2>
+  <p>All traffic between the app, this site and OrphicOS servers is encrypted with TLS. Passwords
+  are stored only as salted PBKDF2 hashes. Access tokens are stored hashed on the server. The
+  design principle behind the service is data minimisation: the most sensitive data — your
+  screen — is engineered to be unstorable, not merely unstored.</p>
+
+  <h2>7. Changes</h2>
+  <p>We will update this policy as the service evolves and change the date above. Material changes
+  affecting registered users will be announced by email.</p>
+</main>
+
+<footer class="foot wrap">
+  <span>© 2026 OrphicOS</span>
+  <span class="foot-links">
+    <a href="mailto:hello@orphicos.app">Contact</a>
+    <a href="/terms.html">Terms</a>
+    <a href="/imprint.html">Imprint</a>
+  </span>
+</footer>
+
+</body>
+</html>

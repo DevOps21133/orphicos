@@ -1,0 +1,44 @@
+/* Shared style for OrphicOS legal pages — matches the landing design tokens. */
+:root{
+  --paper:#edeae2; --paper-raised:#f6f4ef; --ink:#171613; --graphite:#57544d;
+  --faint:#8b887f; --hairline:#d6d2c8; --hairline-soft:#e2ded5;
+  --max:760px; --gutter:clamp(20px,5vw,64px);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:"Inter",system-ui,sans-serif; font-size:16.5px; line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:var(--ink);color:var(--paper)}
+a{color:inherit}
+.wrap{max-width:var(--max);margin-inline:auto;padding-inline:var(--gutter)}
+.nav{border-bottom:1px solid var(--hairline)}
+.nav-inner{display:flex;align-items:center;justify-content:space-between;height:66px}
+.brand{font-family:"Fraunces",serif;font-weight:500;font-size:21px;letter-spacing:-.01em;text-decoration:none}
+.brand span{font-style:italic;font-weight:380}
+.back{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+  text-decoration:none;color:var(--faint)}
+.back:hover{color:var(--ink)}
+main{padding-block:clamp(44px,7vw,80px)}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.28em;text-transform:uppercase;
+  color:var(--faint);font-weight:500;display:block;margin-bottom:18px}
+h1{font-family:"Fraunces",serif;font-weight:350;font-size:clamp(30px,5vw,44px);
+  letter-spacing:-.015em;line-height:1.1;margin-bottom:14px}
+.updated{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.05em;color:var(--faint);
+  margin-bottom:clamp(34px,5vw,54px)}
+h2{font-family:"Fraunces",serif;font-weight:420;font-size:clamp(20px,2.6vw,25px);letter-spacing:-.01em;
+  margin:2.2em 0 .7em;padding-top:1.4em;border-top:1px solid var(--hairline-soft)}
+h2:first-of-type{border-top:none;padding-top:0;margin-top:0}
+p,li{color:var(--graphite);max-width:64ch}
+p+p{margin-top:.9em}
+ul{margin:.7em 0 .9em 1.2em}
+li+li{margin-top:.4em}
+strong{color:var(--ink);font-weight:600}
+.callout{background:var(--paper-raised);border:1px solid var(--hairline);padding:18px 20px;margin:1.2em 0;
+  font-size:15.5px}
+.foot{border-top:1px solid var(--hairline);padding-block:30px;display:flex;justify-content:space-between;
+  gap:18px;flex-wrap:wrap;font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.06em;color:var(--faint)}
+.foot a{text-decoration:none;color:var(--faint)}
+.foot a:hover{color:var(--ink)}
+.foot-links{display:flex;gap:22px;flex-wrap:wrap}

@@ -232,3 +232,11 @@ Landing hero artwork          (landing/assets/)
 Landing hero artwork: AI-generated (Google Gemini), created by the founder,
 all text/branding OrphicOS. Original at landing/assets/src/hero-banner.png;
 web-optimized variants and texture crops in landing/assets/ are derived from it.
+
+----------------------------------------------------------------------
+Web fonts (self-hosted on the orphicos.app landing site)
+----------------------------------------------------------------------
+Fraunces — Copyright 2020 The Fraunces Project Authors — SIL Open Font License 1.1
+Inter — Copyright The Inter Project Authors — SIL Open Font License 1.1
+IBM Plex Mono — Copyright IBM Corp. — SIL Open Font License 1.1
+Served from our own servers (no third-party font requests).
