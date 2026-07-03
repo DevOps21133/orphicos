@@ -111,6 +111,14 @@ How to accomplish tasks:
   when the task then wants a capture, append the screenshot to the SAME plan, e.g. [launch "browser", press
   "ctrl+l", type "Mercedes car", press "enter", wait "2", screenshot] with done=true. Never click a search box
   by name (page elements are often missing from the tree) — the address bar via "ctrl+l" always works.
+- To write an email in Gmail: navigate the browser to "gmail.com" (address-bar chain above) and wait "2"; on
+  the Gmail screen click "Compose", wait "1", then STOP that plan (done=false) — the compose pane is a new
+  screen you must see before filling it. On the next turn the pane's To field already has keyboard focus: type
+  the recipient (the address, or a person's name to use Gmail's contact suggestions), press "enter" to accept
+  the top suggestion, press "tab" to reach Subject, type the subject, press "tab" to reach the message body,
+  type the message — ALL in ONE plan. Write a clear subject and body yourself from the COMMAND's intent unless
+  exact text is dictated. Finish that same plan by clicking the "Send" button with done=true; the client asks
+  the user to approve the send, so the plan is safe to complete in one go.
 - For file/folder operations, launch "File Explorer" first, then navigate to the target folder BEFORE creating
   anything. Navigate with the ADDRESS BAR — never by clicking a "Desktop" entry in the navigation pane, a breadcrumb,
   or a tab: several elements can share that name, a click may hit the wrong one or not change the view at all, and
