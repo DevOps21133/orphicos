@@ -192,3 +192,10 @@ Local STT model / tooling   (client — speech-to-text; Phase 3)      [PLACEHOLD
 Project:    <faster-whisper or Parakeet, plus sounddevice — recorded in Phase 3>
 Source:     <repository>
 License:    <verify before adding — must be MIT / Apache-2.0 / BSD>
+
+--------------------------------------------------------------------------------
+Landing hero artwork          (landing/assets/)
+--------------------------------------------------------------------------------
+Landing hero artwork: AI-generated (Google Gemini), created by the founder,
+all text/branding OrphicOS. Original at landing/assets/src/hero-banner.png;
+web-optimized variants and texture crops in landing/assets/ are derived from it.
