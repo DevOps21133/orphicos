@@ -155,8 +155,18 @@ def run_command(
         done = bool(decision.get("done")) and not stopped and last_failure is None
         on_event({"step": step, "reasoning": summary, "used_vision": screenshot is not None,
                   "actions": results, "done": done, "timings": timings})
-        history.append({"step": step, "reasoning": summary,
-                        "actions": [{"type": r["type"], "target": r["target"]} for r in results]})
+        # History entries must carry enough evidence for the brain to know the work
+        # already happened (typed text is not always readable back from the tree):
+        # keep the value (truncated) and the per-action result, not just the verb.
+        history.append({
+            "step": step, "reasoning": summary,
+            "actions": [
+                {"type": r["type"], "target": r["target"],
+                 "value": None if r["value"] is None else str(r["value"])[:120],
+                 "result": str(r["result"])[:80]}
+                for r in results
+            ],
+        })
 
         if stopped:
             return "stopped"

@@ -39,7 +39,8 @@ Return ONLY a JSON object (no prose, no markdown) with this exact shape:
     {"type": "<verb>", "target_selector": "<element name from the tree, or null>",
      "coords": [x, y] or null, "value": "<text/keys/appname, or null>"}
   ],
-  "done": <true if the COMMAND is already fully satisfied by the current screen, else false>,
+  "done": <true if the COMMAND will be fully satisfied once the actions in THIS response finish (an empty
+           "actions" array means it is already satisfied), else false>,
   "reasoning_summary": "<one short sentence; never echo screen contents>"
 }
 
@@ -59,6 +60,14 @@ Rules:
   the screen (launch, focus_window, a click that opens/closes something, "enter"). For every action AFTER the first
   screen-changing action in your plan, put the element's NAME in "target_selector" (or null to act on the focused
   control) — never a numeric id.
+- STATE (prior progress) lists the actions ALREADY EXECUTED in earlier turns, in order, with their values and
+  results. An executed action took effect even when its effect is not visible in the tree — typed text often cannot
+  be read back, and work may sit in a background window. NEVER re-execute an action STATE shows succeeded. When
+  STATE shows every part of the COMMAND has been carried out, return done=true with "actions": [] — do not redo
+  the work "to be safe".
+- Set done=true TOGETHER WITH the final actions whenever this plan completes the command — the client executes
+  the plan and reports success without another call to you (a failed action still triggers a re-plan, so this is
+  safe). Reserve done=false for when you genuinely must see the resulting screen to plan the next step.
 - If an action in your plan fails, the client aborts the rest of the plan and calls you again; STATE will contain
   "failed_action" describing which action failed and why. Re-plan from the fresh tree — do not blindly repeat it.
 - Keep "reasoning_summary" to one sentence and NEVER copy screen contents into it.
@@ -143,7 +152,16 @@ def _build_messages(command: str, ui_tree: str, state: dict | None, screenshot: 
         f"UI TREE:\n{ui_tree if ui_tree else '(empty — tree unavailable for this app)'}\n",
     ]
     if state:
-        parts.append(f"STATE (prior progress):\n{json.dumps(state)[:2000]}\n")
+        dumped = json.dumps(state)
+        if len(dumped) > 2000 and isinstance(state.get("steps"), list):
+            # Trim by dropping the OLDEST steps first: the newest step is the
+            # evidence the model needs to know the work already happened. A blind
+            # tail cut would chop exactly that.
+            trimmed = dict(state)
+            while len(trimmed["steps"]) > 1 and len(json.dumps(trimmed)) > 2000:
+                trimmed["steps"] = trimmed["steps"][1:]
+            dumped = json.dumps(trimmed)
+        parts.append(f"STATE (prior progress):\n{dumped[:2400]}\n")
     text_block = "\n".join(parts)
 
     if screenshot:
