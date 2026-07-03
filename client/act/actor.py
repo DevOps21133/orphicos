@@ -24,6 +24,52 @@ _WAIT_FOR_TIMEOUT = 120.0  # ceiling for wait_for polling (installs, big copies)
 _WAIT_FOR_POLL = 0.5
 _CLIPBOARD_TYPE_THRESHOLD = 200  # chars; longer text is pasted, not typed key-by-key
 
+# Windows known-folder GUIDs (KNOWNFOLDERID). Only THIS machine knows where these
+# really live (OneDrive redirects Desktop/Documents/Pictures away from the profile
+# root), so the server's brain names folders by keyword and we resolve them here.
+_KNOWN_FOLDER_GUIDS = {
+    "desktop": "{B4BFCC3A-DB2C-424C-B029-7FE99A87C641}",
+    "documents": "{FDD39AD0-238F-46AF-ADB4-6C85480369C7}",
+    "downloads": "{374DE290-123F-4565-9164-39C4925E467B}",
+    "pictures": "{33E28130-4E1E-4676-835A-98395C3BC3BB}",
+}
+
+
+def _known_folder(alias: str) -> Path:
+    """Resolve a known-folder alias ('desktop', ...) to its real location."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        guid_buf = ctypes.create_unicode_buffer(_KNOWN_FOLDER_GUIDS[alias])
+        guid = (ctypes.c_byte * 16)()
+        ctypes.oledll.ole32.CLSIDFromString(guid_buf, ctypes.byref(guid))
+        out = ctypes.c_wchar_p()
+        ctypes.oledll.shell32.SHGetKnownFolderPath(
+            ctypes.byref(guid), wintypes.DWORD(0), None, ctypes.byref(out))
+        try:
+            return Path(out.value)
+        finally:
+            ctypes.windll.ole32.CoTaskMemFree(out)
+    except Exception:
+        return Path.home() / alias.capitalize()
+
+
+def _rebase_known_folder(raw: str) -> Path:
+    """Anchor a save path onto the real user folder it names, if it names one.
+
+    The brain cannot know this machine's real profile layout, so it may say just
+    "desktop", "desktop\\shot.png", or guess a wrong absolute path like
+    C:\\Users\\Public\\Desktop\\shot.png. If ANY component is a known-folder
+    alias, everything from that component on is rebased onto the real folder;
+    otherwise the path is used as given.
+    """
+    parts = Path(raw).expanduser().parts
+    for i, part in enumerate(parts):
+        alias = part.lower()
+        if alias in _KNOWN_FOLDER_GUIDS:
+            return _known_folder(alias).joinpath(*parts[i + 1:])
+    return Path(raw).expanduser()
+
 
 class ActionError(RuntimeError):
     """An action could not be executed (unknown type, or no matching element)."""
@@ -235,14 +281,23 @@ class Actor:
         """
         png = self._desktop.get_screenshot(as_bytes=True)
         stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        default = Path.home() / "Pictures" / "Screenshots" / f"orphic_screenshot_{stamp}.png"
         if value:
-            path = Path(str(value)).expanduser()
+            path = _rebase_known_folder(str(value))
             if path.suffix.lower() != ".png":  # a folder was given -> name the file inside it
                 path = path / f"orphic_screenshot_{stamp}.png"
         else:
-            path = Path.home() / "Pictures" / "Screenshots" / f"orphic_screenshot_{stamp}.png"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(png)
+            path = default
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(png)
+        except OSError:
+            # Never fail the run over an unwritable save path (the brain can only
+            # guess paths) — fall back to our folder and say where it really went.
+            default.parent.mkdir(parents=True, exist_ok=True)
+            default.write_bytes(png)
+            return (f"screenshot saved to {default} "
+                    f"(requested location {path} was not writable)")
         return f"screenshot saved to {path}"
 
     def _do_wait(self, action: dict, value) -> str:

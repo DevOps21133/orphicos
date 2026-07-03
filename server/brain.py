@@ -66,8 +66,8 @@ Rules:
 - "value" holds: the app name for launch; the text for type; the key chord for press (e.g. "ctrl+s", "enter");
   the direction for scroll ("up"/"down"); the number of seconds for wait; for wait_for the name of the
   element/window to wait for (prefix "gone:" to wait until it disappears); the text for set_clipboard; the
-  absolute file/folder path for open_path; or, for screenshot, the absolute save path (null saves to the
-  user's Pictures\\Screenshots folder).
+  absolute file/folder path for open_path; or, for screenshot, the save location (see the screenshot rule —
+  null saves to the user's Pictures\\Screenshots folder).
 - For a long-running operation (an install, a large copy, a slow page), do NOT chain fixed waits: emit ONE
   {"type":"wait_for","value":"<name that will appear>"} or {"type":"wait_for","value":"gone:<name>"} — the
   client polls for up to 2 minutes and re-plans if it times out. Pure waiting does not use up your step budget.
@@ -78,6 +78,10 @@ Rules:
   client captures and saves the image on the user's own machine. NEVER drive Snipping Tool or press
   "printscreen" for this. If a specific app should be in the shot, focus_window/launch it FIRST in the same
   plan, then screenshot. This usually completes the request: set done=true alongside it.
+  Save location: you do NOT know this machine's real folder layout, so NEVER invent an absolute path like
+  C:\\Users\\<name>\\Desktop. When the user names a place, put a folder KEYWORD in "value" — "desktop",
+  "documents", "downloads" or "pictures", optionally with a filename like "desktop\\hilux.png" — and the
+  client resolves the real location. Use an absolute path only when the command itself spelled one out.
 - BATCH AGGRESSIVELY: "actions" is an ORDERED PLAN the client executes in sequence WITHOUT consulting you between
   steps. Every extra call to you costs ~10 seconds, so chain as MANY actions as you can confidently predict from
   THIS screen: launch an app and immediately type into it (a launch guarantees the app owns the foreground before

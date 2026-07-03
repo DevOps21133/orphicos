@@ -202,6 +202,46 @@ class ScreenshotTests(unittest.TestCase):
             files = list(Path(td).glob("orphic_screenshot_*.png"))
             self.assertEqual(len(files), 1)
 
+    def test_screenshot_desktop_keyword_resolves_to_real_desktop(self):
+        # The brain names folders by keyword ("desktop"); the client resolves the
+        # real location. Patch the resolver so the test never touches the profile.
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as td:
+            with patch("client.act.actor._known_folder", return_value=Path(td)) as kf:
+                result = self.actor.execute({"type": "screenshot",
+                                             "value": r"desktop\hilux.png"})
+            kf.assert_called_once_with("desktop")
+            target = Path(td) / "hilux.png"
+            self.assertTrue(target.exists())
+            self.assertIn(str(target), result)
+
+    def test_screenshot_guessed_absolute_path_rebases_onto_real_folder(self):
+        # A wrong guess like C:\Users\Public\Desktop\x.png must land on the REAL
+        # desktop, not fail with PermissionError.
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as td:
+            with patch("client.act.actor._known_folder", return_value=Path(td)):
+                self.actor.execute({"type": "screenshot",
+                                    "value": r"C:\Users\Public\Desktop\shot.png"})
+            self.assertTrue((Path(td) / "shot.png").exists())
+
+    def test_screenshot_unwritable_path_falls_back_to_default(self):
+        # An unwritable target must never fail the run — the image lands in the
+        # default folder and the result says so.
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as td:
+            blocker = Path(td) / "blocked"
+            blocker.write_text("a file, so mkdir under it fails")
+            with patch("client.act.actor.Path.home", return_value=Path(td)):
+                result = self.actor.execute({"type": "screenshot",
+                                             "value": str(blocker / "sub" / "x.png")})
+            files = list((Path(td) / "Pictures" / "Screenshots").glob("orphic_screenshot_*.png"))
+            self.assertEqual(len(files), 1)
+            self.assertIn("was not writable", result)
+
     def test_screenshot_default_path_is_pictures_screenshots(self):
         # Patch home so the default path never touches the real user profile.
         import tempfile
