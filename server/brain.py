@@ -152,6 +152,12 @@ How to accomplish tasks:
   "ctrl+t", new Notepad tab "ctrl+n", new Word/Excel/PowerPoint document "ctrl+n", new File Explorer window
   "ctrl+n" — or launch the app if it is not running. Work inside an existing window ONLY when the command
   explicitly targets what is open in it ("in this tab", "in the open document", "sum the column in this sheet").
+  THE LAUNCH TRAP (applies to EVERY single-instance app — Notepad, Word, Excel, PowerPoint, File Explorer,
+  the browser): if the tree already shows a window of that app (e.g. a "Notepad" window holding the user's
+  text), do NOT "launch" it again to get a blank surface. Re-launching a single-instance app just FOCUSES the
+  user's existing document, so your next "type" lands in THEIR work. When the app is already open, focus_window
+  it and press "ctrl+n" (browser: "ctrl+t") for a FRESH tab/document BEFORE typing. Only "launch" when no
+  window of that app appears in the tree.
 - To search the web or open a website, drive the BROWSER through its address bar (it doubles as a search box).
   FIRST decide where the work happens — the user's open tabs are THEIR workspace, never yours:
   * Browser NOT running (no taskbar row): launch it, press "ctrl+l" to focus the address bar of its start tab.
@@ -180,11 +186,22 @@ How to accomplish tasks:
 - Then create and rename in that SAME response, using keyboard shortcuts (not the small ribbon/toolbar buttons):
   press "ctrl+shift+n", wait "1" (the new folder's rename box takes a moment to appear), type the folder name, press
   "enter"; then press "f2", wait "1", type the new name, press "enter".
-- SAVE/OPEN DIALOGS: never click-navigate the folder tree inside a Save/Open dialog. Press "alt+n" to focus
-  the "File name" field, type the FULL absolute path (folders included, e.g. "C:\\OrphicDemo\\report.txt"),
-  then press "enter" — the dialog saves/opens exactly there.
+- SAVE/OPEN DIALOGS (same recipe for every app): never click-navigate the folder tree inside a Save/Open
+  dialog. After the "ctrl+s" / "ctrl+o" that opens it, FIRST wait for the dialog with
+  {"type":"wait_for","value":"Save As"} (use "Open" for ctrl+o) — this barrier stops the app's own text from
+  leaking into the filename box. THEN press "alt+n" to focus the "File name" field, press "ctrl+a" to clear
+  whatever it already holds, type the path, and press "enter" — the dialog saves/opens exactly there. For a
+  USER folder whose real path you do NOT know, type a KEYWORD path — "desktop\\poem.txt", "documents\\report.docx",
+  "downloads\\x.txt" or "pictures\\y.png" — and the client resolves it to this machine's real folder (OneDrive
+  redirects included). NEVER invent an absolute user path like "C:\\Users\\Public\\Desktop\\..." or
+  "C:\\Users\\<name>\\..."; you cannot know it. Use a full absolute path only when the COMMAND itself spelled
+  one out (e.g. "C:\\OrphicDemo\\report.txt").
 - WINDOW MANAGEMENT is key chords, never dragging: "win+up" maximizes the active window, "win+left" /
   "win+right" snap it to half the screen (side-by-side work), "alt+f4" closes it (the user approves a close).
+  These chords act on the FOCUSED window, so to snap/move/maximize a SPECIFIC app you MUST focus_window it
+  FIRST, then press the chord — this holds for every app. E.g. Chrome left and Notepad right:
+  [focus_window "Google Chrome", press "win+left", focus_window "Notepad", press "win+right"]. Pressing a snap
+  chord without focusing first moves whatever happened to be active — usually the wrong window, or nothing.
 - To REPLACE what a text field already contains: press "ctrl+a", then type the new text — typing without
   the select-all only appends.
 - To jump to a spreadsheet cell that is not adjacent: press "ctrl+g", type the cell reference (e.g. "C10"),

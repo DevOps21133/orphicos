@@ -12,6 +12,7 @@ for that element's live centre coordinates.
 from __future__ import annotations
 
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 from time import monotonic, sleep
@@ -69,6 +70,22 @@ def _rebase_known_folder(raw: str) -> Path:
         if alias in _KNOWN_FOLDER_GUIDS:
             return _known_folder(alias).joinpath(*parts[i + 1:])
     return Path(raw).expanduser()
+
+
+# A typed value that BEGINS with a known-folder keyword + path separator is a save
+# path headed for a Save/Open dialog (e.g. "desktop\\poem.txt"), not prose. The brain
+# emits this form for EVERY app's save dialog because it cannot know the real path;
+# the client resolves it here so ordinary typed text is never touched.
+_KEYWORD_PATH_RE = re.compile(
+    r"^(?:" + "|".join(_KNOWN_FOLDER_GUIDS) + r")[\\/]", re.IGNORECASE)
+
+
+def _resolve_typed_path(text: str) -> str:
+    """Rewrite a keyword save path to this machine's real absolute path; else pass through."""
+    stripped = text.strip()
+    if _KEYWORD_PATH_RE.match(stripped):
+        return str(_rebase_known_folder(stripped))
+    return text
 
 
 class ActionError(RuntimeError):
@@ -221,7 +238,7 @@ class Actor:
         return f"right-clicked {loc}"
 
     def _do_type(self, action: dict, value) -> str:
-        text = "" if value is None else str(value)
+        text = _resolve_typed_path("" if value is None else str(value))
         loc = self._resolve_loc(action)
         if len(text) > _CLIPBOARD_TYPE_THRESHOLD and self._paste(loc, text):
             return (f"pasted {len(text)} chars into {loc}" if loc is not None

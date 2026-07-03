@@ -254,6 +254,41 @@ class ScreenshotTests(unittest.TestCase):
             self.assertIn("Screenshots", result)
 
 
+class TypedPathTests(unittest.TestCase):
+    """A keyword save path typed into any app's Save/Open dialog resolves to the
+    real user folder; ordinary typed prose is never rewritten."""
+
+    def test_keyword_path_resolves_to_real_folder(self):
+        from pathlib import Path
+        from client.act.actor import _resolve_typed_path
+        with patch("client.act.actor._known_folder",
+                   return_value=Path(r"C:\Users\Real\Desktop")):
+            self.assertEqual(_resolve_typed_path(r"desktop\poem.txt"),
+                             r"C:\Users\Real\Desktop\poem.txt")
+
+    def test_documents_keyword_resolves(self):
+        from pathlib import Path
+        from client.act.actor import _resolve_typed_path
+        with patch("client.act.actor._known_folder",
+                   return_value=Path(r"D:\OneDrive\Documents")):
+            self.assertEqual(_resolve_typed_path(r"documents\report.docx"),
+                             r"D:\OneDrive\Documents\report.docx")
+
+    def test_prose_mentioning_a_folder_is_left_untouched(self):
+        from client.act.actor import _resolve_typed_path
+        prose = "Dear team, let's meet at the desktop by the window."
+        self.assertEqual(_resolve_typed_path(prose), prose)
+
+    def test_bare_keyword_without_separator_is_left_untouched(self):
+        from client.act.actor import _resolve_typed_path
+        self.assertEqual(_resolve_typed_path("desktop"), "desktop")
+
+    def test_explicit_absolute_path_is_typed_as_given(self):
+        from client.act.actor import _resolve_typed_path
+        self.assertEqual(_resolve_typed_path(r"C:\OrphicDemo\report.txt"),
+                         r"C:\OrphicDemo\report.txt")
+
+
 class ScrollAndWaitTests(unittest.TestCase):
     def setUp(self) -> None:
         self.desktop = FakeDesktop(node_names=[])
