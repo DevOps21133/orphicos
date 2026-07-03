@@ -146,10 +146,17 @@ def create_app(submit: SubmitFn, health_check: Callable[[], bool],
     @app.get("/api/status")
     async def status() -> JSONResponse:
         connected = await asyncio.to_thread(health_check)
+        active = hub.active  # snapshot: it can retire between the two reads below
+        queued = hub.queued_commands()
         return JSONResponse({"connected": bool(connected),
                              "server_base": server_base,
-                             "running": hub.active is not None,
-                             "queued": len(hub.queued_commands()),
+                             "running": active is not None,
+                             # A freshly loaded page replays these so a refresh mid-run
+                             # doesn't look idle (submitting would then say "queued"
+                             # with no visible reason — the active run must stay visible).
+                             "active_command": active.command if active else None,
+                             "queued_commands": queued,
+                             "queued": len(queued),
                              "kill_hotkey": app.state.kill_label,
                              "voice": voice is not None,
                              "voice_hotkey": getattr(voice, "HOTKEY", None)})

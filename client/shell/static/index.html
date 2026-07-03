@@ -372,11 +372,23 @@
     pill.classList.toggle("off", !on);
     pillText.textContent = text;
   }
+  let replayed = false;
   async function pollStatus() {
     try {
       const r = await fetch("/api/status");
       const s = await r.json();
       setPill(s.connected, s.connected ? "Connected to OrphicOS brain" : "OrphicOS brain unreachable");
+      // One-time replay on page load: a refresh mid-run must not look idle. Skip it
+      // if a live run_started already arrived over the WebSocket (running === true).
+      if (!replayed) {
+        replayed = true;
+        if (s.active_command && !running) {
+          setRunning(true);
+          addDivider("“" + s.active_command + "”");
+          addSystem("This command was already running when the page loaded — steps continue below.");
+        }
+        if (s.queued_commands && s.queued_commands.length) renderQueue(s.queued_commands);
+      }
       // Show the panic chord that actually armed; if none was free, the button still halts.
       stopHint.textContent = s.kill_hotkey ? s.kill_hotkey : "click to halt";
       if (s.voice && mic.disabled && voiceState === "idle") {

@@ -213,6 +213,21 @@ class ShellAppTests(unittest.TestCase):
         with TestClient(app_down) as client:
             self.assertFalse(client.get("/api/status").json()["connected"])
 
+    def test_status_replays_active_and_queued_commands(self):
+        # A refreshed page rebuilds its view from /api/status: the active command and
+        # the queue must be visible there, not only in live WebSocket events.
+        app = create_app(submit=lambda s, d: None, health_check=lambda: True)
+        with TestClient(app) as client:
+            hub = app.state.hub
+            self.assertIsNone(client.get("/api/status").json()["active_command"])
+            self.assertEqual(hub.admit(RunSession("open notepad", hub.emit)), 0)
+            self.assertEqual(hub.admit(RunSession("open calculator", hub.emit)), 1)
+            body = client.get("/api/status").json()
+            self.assertTrue(body["running"])
+            self.assertEqual(body["active_command"], "open notepad")
+            self.assertEqual(body["queued_commands"], ["open calculator"])
+            self.assertEqual(body["queued"], 1)
+
     def test_ws_streams_a_run_to_completion(self):
         desktop = FakeDesktop(node_names=["Save"], active_window="Untitled - Notepad")
         brain = FakeBrain([_decision([LAUNCH], done=True)])
