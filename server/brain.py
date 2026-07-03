@@ -123,7 +123,9 @@ How to accomplish tasks:
   told apart later — focus_window would land on an arbitrary one. NEVER launch them all first and fill them
   afterwards. Interleave instead: launch, then IMMEDIATELY do that instance's work (a launch guarantees the new
   window owns the foreground), then launch the next — [launch, type/paste, launch, type/paste, ...] in ONE plan.
-  This interleaving is the ONE exception to the same-launch-twice rule above. Also know: Windows 11 Notepad is
+  This interleaving is the ONE exception to the same-launch-twice rule above. When the SAME text goes into every
+  instance, emit set_clipboard ONCE up front, then paste with press "ctrl+v" in each instance — NEVER repeat a
+  long text value across actions; it bloats the plan until it gets cut off. Also know: Windows 11 Notepad is
   TABBED — "ctrl+n" opens a new TAB inside the SAME window, never a new window; a new window needs its own launch.
 - If a modal dialog, popup, or wizard is blocking the window you need, handle it BEFORE the task: dismiss it with
   its Close/Cancel/OK button or press "escape". If it asks whether to discard or resume/recover earlier work, pick
@@ -305,7 +307,7 @@ def _create_completion(client: OpenAI, model: str, messages: list[dict]):
     for extra in attempts:
         try:
             return client.chat.completions.create(
-                model=model, messages=messages, temperature=0.2, max_tokens=2048,
+                model=model, messages=messages, temperature=0.2, max_tokens=4096,
                 extra_body=body or None, **extra,
             )
         except BadRequestError as e:
@@ -316,8 +318,13 @@ def _create_completion(client: OpenAI, model: str, messages: list[dict]):
     raise RuntimeError(f"brain: LLM call failed after parameter fallbacks: {last_err}")
 
 
-def _extract_json(raw: str) -> dict:
-    """Return the first JSON OBJECT in the model output, else a safe empty decision."""
+def _extract_json(raw: str) -> dict | None:
+    """Return the first JSON OBJECT in the model output, or None if there isn't one.
+
+    None (unparseable/empty/truncated output) matters to the caller: decide() re-asks
+    the model once instead of silently degrading to an empty decision — an empty plan
+    the client dutifully "executes" looks like the product doing nothing.
+    """
     raw = raw.strip()
     if raw.startswith("```"):
         raw = raw.strip("`")
@@ -335,7 +342,7 @@ def _extract_json(raw: str) -> dict:
             continue
         if isinstance(parsed, dict):  # ignore valid-but-wrong-shape JSON (arrays, null, numbers)
             return parsed
-    return {"actions": [], "done": False, "reasoning_summary": ""}
+    return None
 
 
 def _coerce_str(v: Any) -> str | None:
@@ -352,7 +359,10 @@ def _coerce_coords(c: Any) -> list[float] | None:
 
 
 def _parse_decision(raw: str, allow_coords: bool) -> dict:
-    data = _extract_json(raw)
+    return _decision_from(_extract_json(raw) or {}, allow_coords)
+
+
+def _decision_from(data: dict, allow_coords: bool) -> dict:
     actions = []
     for a in (data.get("actions") or []):
         if not isinstance(a, dict):
@@ -396,16 +406,41 @@ def decide(command: str, ui_tree: str, state: dict | None = None,
     messages = _build_messages(command, ui_tree, state, screenshot, unlocked_skills)
 
     t0 = time.monotonic()
-    completion = _create_completion(client, model, messages)
-    latency_ms = int((time.monotonic() - t0) * 1000)
+    tokens = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
-    decision = _parse_decision(completion.choices[0].message.content or "",
-                               allow_coords=screenshot is not None)
-    u = completion.usage
+    def _ask(msgs: list[dict]) -> tuple[dict | None, str, str | None]:
+        completion = _create_completion(client, model, msgs)
+        u = completion.usage
+        for k in tokens:
+            tokens[k] += getattr(u, k, None) or 0
+        choice = completion.choices[0]
+        content = choice.message.content or ""
+        return _extract_json(content), content, getattr(choice, "finish_reason", None)
+
+    parsed, content, finish = _ask(messages)
+    retried = False
+    # A reply with no JSON object (empty, prose, or cut off at the token cap) must not
+    # silently become an empty decision — re-ask ONCE with a corrective nudge. Only a
+    # second failure degrades to the safe empty plan, and the metadata says why.
+    if parsed is None or finish == "length":
+        retried = True
+        nudge = [
+            {"role": "assistant", "content": content[:1000] if content else "(empty reply)"},
+            {"role": "user", "content":
+             "That reply was not one valid JSON decision object (it may have been empty or "
+             "cut off at the length limit). Reply again with ONLY the JSON object — no prose, "
+             "no code fences. If the plan was long, compress it: set_clipboard ONCE and paste "
+             "with ctrl+v instead of repeating long text values."},
+        ]
+        parsed, content, finish = _ask(messages + nudge)
+
+    latency_ms = int((time.monotonic() - t0) * 1000)
+    decision = _decision_from(parsed or {}, allow_coords=screenshot is not None)
     usage = {
-        "prompt_tokens": getattr(u, "prompt_tokens", None),
-        "completion_tokens": getattr(u, "completion_tokens", None),
-        "total_tokens": getattr(u, "total_tokens", None),
+        **tokens,
         "latency_ms": latency_ms,
+        "finish_reason": finish,
+        "parse_ok": parsed is not None,
+        "retried": retried,
     }
     return decision, usage

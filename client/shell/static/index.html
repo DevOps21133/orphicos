@@ -100,6 +100,9 @@
   .act .res.ok { color: var(--good); }
   .act .res.skip { color: var(--warn); }
   .sys { color: var(--muted); font-size: 13px; text-align: center; padding: 4px; }
+  .think { color: var(--muted); font-size: 13px; text-align: center; padding: 8px; }
+  .think .dots::after { content: "…"; animation: dots 1.4s steps(4, end) infinite; }
+  @keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "…"; } }
   .divider { text-align: center; color: var(--muted); font-size: 12px; margin: 4px 0; }
   .divider span { background: var(--bg); padding: 0 10px; }
 
@@ -267,9 +270,36 @@
       row.appendChild(verb); row.appendChild(obj); row.appendChild(res);
       acts.appendChild(row);
     });
+    if (!(ev.actions || []).length && !ev.done && !ev.locked_skill) {
+      const n = document.createElement("div");
+      n.className = "act";
+      const note = document.createElement("span"); note.className = "res skip";
+      note.textContent = ev.reasoning ? "No actions this step." :
+        "The engine returned no plan for this step — asking it again.";
+      n.appendChild(note);
+      acts.appendChild(n);
+    }
     card.appendChild(acts);
     feed.appendChild(card);
     card.scrollIntoView({ behavior: "smooth", block: "end" });
+  }
+
+  // The brain legitimately takes 15–60s per decision: without a visible working state
+  // that silence reads as "nothing is happening" and invites a duplicate submission.
+  let thinkEl = null;
+  function setThinking(on) {
+    if (on) {
+      if (!thinkEl) {
+        thinkEl = document.createElement("div");
+        thinkEl.className = "think";
+        thinkEl.innerHTML = 'OrphicOS is working<span class="dots"></span>';
+      }
+      clearEmpty();
+      feed.appendChild(thinkEl);   // (re)append: keeps it below the latest step
+      thinkEl.scrollIntoView({ behavior: "smooth", block: "end" });
+    } else if (thinkEl && thinkEl.parentNode) {
+      thinkEl.remove();
+    }
   }
 
   function setRunning(on) {
@@ -306,6 +336,7 @@
       case "run_started":
         setRunning(true);
         addDivider("“" + ev.command + "”");
+        setThinking(true);
         if (ev.flagged && ev.flagged.length) {
           flag.textContent = "Heads up: this command mentions " + ev.flagged.join(", ") +
             ". You'll be asked to confirm each risky step before it runs.";
@@ -315,7 +346,9 @@
         }
         break;
       case "step":
+        setThinking(false);
         addStep(ev);
+        if (!ev.done) setThinking(true);
         break;
       case "approval_required":
         pendingApproval = ev.id;
@@ -326,6 +359,7 @@
       case "run_finished":
         overlay.classList.remove("show");
         setRunning(false);
+        setThinking(false);
         addSystem(finishedLabel(ev.outcome));
         break;
       case "queued":
@@ -386,6 +420,7 @@
           setRunning(true);
           addDivider("“" + s.active_command + "”");
           addSystem("This command was already running when the page loaded — steps continue below.");
+          setThinking(true);
         }
         if (s.queued_commands && s.queued_commands.length) renderQueue(s.queued_commands);
       }

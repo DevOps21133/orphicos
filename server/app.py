@@ -196,11 +196,14 @@ def command(req: CommandRequest, user_id: str = Depends(current_user)) -> Comman
     # screenshot, or command text (Rule 4).
     calls = auth.record_call(user_id)
     log.info(
-        "cmd user=%s actions=%d types=%s done=%s vision=%s asked_vision=%s skill=%s latency_ms=%s tokens=%s calls=%d",
+        "cmd user=%s actions=%d types=%s done=%s vision=%s asked_vision=%s skill=%s latency_ms=%s "
+        "tokens=%s/%s finish=%s parse_ok=%s retried=%s calls=%d",
         user_id, len(response.actions),
         ",".join(a.type for a in response.actions) or "-",
         response.done, bool(req.screenshot), response.need_screenshot,
         response.skill or "-",
-        usage.get("latency_ms"), usage.get("total_tokens"), calls,
+        usage.get("latency_ms"),
+        usage.get("prompt_tokens"), usage.get("completion_tokens"),
+        usage.get("finish_reason"), usage.get("parse_ok"), usage.get("retried"), calls,
     )
     return response
