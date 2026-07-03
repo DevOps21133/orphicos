@@ -21,6 +21,7 @@ from client.net import BrainClient
 from client.shell.app import create_app
 from client.shell.hotkey import GlobalKillHotkey
 from client.shell.runner import DesktopWorker
+from client.voice import VoiceController
 
 
 def main() -> int:
@@ -42,8 +43,16 @@ def main() -> int:
     allowed_origins = {f"http://{cfg.shell_host}:{cfg.shell_port}",
                        f"http://127.0.0.1:{cfg.shell_port}",
                        f"http://localhost:{cfg.shell_port}"}
+    # Phase 3 voice front door: Ctrl+Alt+V push-to-talk (and the UI mic button) record
+    # locally, transcribe locally, and emit the transcript into the shell — where it only
+    # FILLS the command bar. Submission stays a human keypress (confirm gate, §7.3).
+    voice = VoiceController()
+
     app = create_app(submit=worker.submit, health_check=brain.health,
-                     server_base=cfg.server_base, allowed_origins=allowed_origins)
+                     server_base=cfg.server_base, allowed_origins=allowed_origins,
+                     voice=voice)
+    voice.bind_emit(app.state.hub.emit)
+    voice.start()  # arms push-to-talk and warms the local STT model in the background
 
     # Global kill switch: halt the active run even if the UI is buried (§9.3).
     def panic() -> None:
@@ -68,6 +77,7 @@ def main() -> int:
         uvicorn.run(app, host=host, port=port, log_level="warning")
     finally:
         hotkey.stop()
+        voice.stop()
         worker.shutdown()
         brain.close()
     return 0

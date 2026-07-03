@@ -285,5 +285,71 @@ class ShellAppTests(unittest.TestCase):
                 self.assertEqual(ev["type"], "status")
 
 
+class FakeVoice:
+    """Test fixture: a VoiceController stand-in (duck-typed .toggle / .HOTKEY)."""
+
+    HOTKEY = "Ctrl+Alt+V"
+
+    def __init__(self) -> None:
+        self.toggles = 0
+        self.emit = lambda e: None  # bound to hub.emit by the test, like __main__ does
+
+    def toggle(self) -> None:
+        self.toggles += 1
+        if self.toggles % 2:
+            self.emit({"type": "voice", "state": "recording"})
+        else:
+            self.emit({"type": "transcript", "text": "open notepad"})
+            self.emit({"type": "voice", "state": "idle"})
+
+
+class VoiceShellTests(unittest.TestCase):
+    """The Phase 3 voice front door as seen by the shell (mic message + events)."""
+
+    def test_status_reports_voice_and_hotkey(self):
+        app = create_app(submit=lambda s, d: None, health_check=lambda: True,
+                         voice=FakeVoice())
+        with TestClient(app) as client:
+            body = client.get("/api/status").json()
+            self.assertTrue(body["voice"])
+            self.assertEqual(body["voice_hotkey"], "Ctrl+Alt+V")
+
+    def test_status_without_voice(self):
+        app = create_app(submit=lambda s, d: None, health_check=lambda: True)
+        with TestClient(app) as client:
+            body = client.get("/api/status").json()
+            self.assertFalse(body["voice"])
+            self.assertIsNone(body["voice_hotkey"])
+
+    def test_mic_without_voice_is_a_clean_error(self):
+        app = create_app(submit=lambda s, d: None, health_check=lambda: True)
+        with TestClient(app) as client:
+            with client.websocket_connect("/ws") as ws:
+                ws.send_json({"type": "mic"})
+                ev = ws.receive_json()
+                self.assertEqual(ev["type"], "error")
+                self.assertIn("Voice input", ev["message"])
+
+    def test_mic_toggles_and_transcript_reaches_the_browser_without_a_run(self):
+        voice = FakeVoice()
+        submitted = []
+        app = create_app(submit=lambda s, d: submitted.append(s),
+                         health_check=lambda: True, voice=voice)
+        with TestClient(app) as client:
+            voice.emit = app.state.hub.emit  # as __main__ binds the real controller
+            with client.websocket_connect("/ws") as ws:
+                ws.send_json({"type": "mic"})
+                self.assertEqual(ws.receive_json(),
+                                 {"type": "voice", "state": "recording"})
+                ws.send_json({"type": "mic"})
+                self.assertEqual(ws.receive_json(),
+                                 {"type": "transcript", "text": "open notepad"})
+                self.assertEqual(ws.receive_json(),
+                                 {"type": "voice", "state": "idle"})
+        self.assertEqual(voice.toggles, 2)
+        # CONFIRM GATE: a transcript must never start a run by itself.
+        self.assertEqual(submitted, [])
+
+
 if __name__ == "__main__":
     unittest.main()

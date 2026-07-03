@@ -64,6 +64,9 @@
     color: var(--muted); font-size: 18px; display: grid; place-items: center;
   }
   .mic[disabled] { cursor: not-allowed; opacity: 0.55; }
+  .mic.rec { background: rgba(255,92,108,0.18); color: var(--bad); border-color: var(--bad); animation: pulse 1.1s ease-in-out infinite; }
+  .mic.busy { color: var(--warn); border-color: rgba(255,180,84,0.5); }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,92,108,0.45); } 50% { box-shadow: 0 0 0 8px rgba(255,92,108,0); } }
   .run {
     background: var(--accent); color: #06122e; border: none; font-weight: 650;
     padding: 11px 20px; font-size: 15px;
@@ -145,7 +148,7 @@
 
   <main>
     <div class="composer">
-      <button class="mic" id="mic" disabled title="Voice input — coming soon">🎙</button>
+      <button class="mic" id="mic" disabled title="Voice input">🎙</button>
       <input id="cmd" type="text" autocomplete="off" placeholder="What should the machine do?" />
       <button class="run" id="run">Run</button>
     </div>
@@ -186,8 +189,10 @@
   const flag = $("flag"), errBanner = $("err");
   const overlay = $("overlay"), mVerb = $("mVerb"), mWhat = $("mWhat");
   const stopHint = $("stopHint");
+  const mic = $("mic");
   let pendingApproval = null;
   let running = false;
+  let voiceState = "idle";
 
   function clearEmpty() { if (empty) empty.remove(); }
 
@@ -311,6 +316,18 @@
       case "status":
         addSystem(ev.message);
         break;
+      case "voice":
+        setVoiceState(ev.state);
+        if (ev.message) addSystem(ev.message);
+        break;
+      case "transcript":
+        // CONFIRM GATE: the transcript only FILLS the bar. It is NEVER auto-submitted —
+        // the human reads it and presses Enter (or Run) to execute.
+        cmd.value = ev.text;
+        cmd.focus();
+        cmd.setSelectionRange(cmd.value.length, cmd.value.length);
+        addSystem("Heard: “" + ev.text + "” — review it, then press Enter to run.");
+        break;
       case "error":
         showError(ev.message);
         setRunning(false);
@@ -340,6 +357,11 @@
       setPill(s.connected, s.connected ? "Connected to OrphicOS brain" : "OrphicOS brain unreachable");
       // Show the panic chord that actually armed; if none was free, the button still halts.
       stopHint.textContent = s.kill_hotkey ? s.kill_hotkey : "click to halt";
+      if (s.voice && mic.disabled && voiceState === "idle") {
+        mic.disabled = false;
+        mic.title = "Voice input — hold " + (s.voice_hotkey || "Ctrl+Alt+V") +
+          " to talk, or click to start/stop";
+      }
     } catch (_) {
       setPill(false, "OrphicOS brain unreachable");
     }
@@ -356,6 +378,15 @@
     cmd.value = "";
   }
 
+  function setVoiceState(state) {
+    voiceState = state;
+    mic.classList.toggle("rec", state === "recording");
+    mic.classList.toggle("busy", state === "transcribing");
+    mic.disabled = state === "transcribing";
+    mic.textContent = state === "recording" ? "■" : "🎙";
+  }
+
+  mic.onclick = () => send({ type: "mic" });
   runBtn.onclick = submit;
   cmd.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
   $("stop").onclick = () => send({ type: "stop" });

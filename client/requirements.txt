@@ -15,3 +15,10 @@ windows-use==0.8.1
 httpx>=0.28,<1.0
 fastapi>=0.115,<1.0
 uvicorn>=0.30,<1.0
+
+# Phase 3 voice input — LOCAL speech-to-text (mic audio never leaves the machine).
+# av is pinned <14: newer av wheels ship DLLs that Windows Smart App Control blocks
+# on locked-down machines (low binary reputation); 13.x loads cleanly.
+faster-whisper>=1.2,<2.0
+sounddevice>=0.5,<1.0
+av>=13.1,<14
