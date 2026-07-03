@@ -225,3 +225,10 @@ STT model weights: Whisper "base" (Systran/faster-whisper-base), MIT license
 
 The push-to-talk hotkey (client/voice/ptt.py) uses the Win32 API directly via
 ctypes (Python stdlib) — no third-party hotkey library was added.
+
+--------------------------------------------------------------------------------
+Landing hero artwork          (landing/assets/)
+--------------------------------------------------------------------------------
+Landing hero artwork: AI-generated (Google Gemini), created by the founder,
+all text/branding OrphicOS. Original at landing/assets/src/hero-banner.png;
+web-optimized variants and texture crops in landing/assets/ are derived from it.

@@ -1,0 +1,249 @@
+/* OrphicOS landing — "Museum plate" (promoted from variant A).
+   Gallery-wall bone ground, the artwork framed as an exhibit, factual plate.
+   All hues sampled from landing/assets/src/hero-banner.png (see design tokens);
+   derived shades mix a sampled hue with black/white only.
+   Spacing: strict 8px rhythm. Fonts: 1 serif + 1 sans. Zero JS. */
+
+:root {
+  --ink: #282c31;      /* sampled: wave shadow (1700,400) */
+  --mid: #6b6b6e;      /* sampled: storm grey (150,100) */
+  --grey: #81807e;     /* sampled: sky grey (950,100) */
+  --sail: #b1a397;     /* sampled: sail bone (750,250) */
+  --bone: #bab6a7;     /* sampled: calm water (1150,460) */
+  --wall: #e8e6de;     /* --bone + white ~65% — gallery wall */
+  --wall-2: #dedbd0;   /* --bone + white ~50% — plate card */
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--wall);
+  color: var(--ink);
+  font-family: "Segoe UI", -apple-system, "Helvetica Neue", Arial, sans-serif;
+  font-size: 1.0625rem; /* 17px body */
+  line-height: 1.7;
+  overflow-x: hidden;
+}
+
+h1, h2, .wordmark, .plate-title, .data-line {
+  font-family: "Iowan Old Style", Georgia, "Times New Roman", serif;
+}
+
+/* ---- masthead ---- */
+
+.masthead { padding: 40px 24px 0; text-align: center; }
+
+.wordmark {
+  font-size: 1.5rem;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+
+/* ---- hero: the sentence, huge, alone ---- */
+
+.hero {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 120px 24px 96px;
+  text-align: center;
+}
+
+h1 {
+  font-size: clamp(3rem, 8vw, 7rem);   /* >= 1.5x jump over lede */
+  font-weight: 500;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+.lede {
+  margin-top: 32px;
+  font-size: 1.625rem;  /* >=1.5x body */
+  color: var(--mid);
+}
+
+/* ---- the exhibit ---- */
+
+.exhibit {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 24px 120px;
+}
+
+.frame {
+  border: 1px solid var(--ink);
+  padding: 16px;               /* the mat */
+  background: var(--wall-2);
+}
+
+.frame img { display: block; width: 100%; height: auto; }
+
+.plate {
+  display: inline-block;
+  margin-top: 24px;
+  padding: 16px 24px;
+  background: var(--wall-2);
+  border: 1px solid var(--bone);
+}
+
+.plate-title {
+  display: block;
+  font-size: 1.125rem;
+  font-style: italic;
+}
+
+.plate-meta {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mid);
+}
+
+/* ---- exhibit-label sections ---- */
+
+section:not(.hero):not(.exhibit) {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 96px 24px;
+  border-top: 1px solid var(--bone);
+}
+
+.label {
+  font-size: 0.75rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--grey);
+  margin-bottom: 24px;
+}
+
+.body-large { font-size: 1.625rem; line-height: 1.6; }
+
+/* ---- specimen: one command, catalogued ---- */
+
+.catalog {
+  border: 1px solid var(--bone);
+  background: var(--wall-2);
+  padding: 32px;
+}
+
+.catalog-command {
+  font-family: "Iowan Old Style", Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-size: 1.625rem;
+  line-height: 1.4;
+}
+
+.catalog-record { margin-top: 24px; }
+
+.catalog-record div {
+  display: flex;
+  gap: 16px;
+  padding: 8px 0;
+  border-top: 1px solid var(--bone);
+}
+
+.catalog-record dt {
+  flex: 0 0 6rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--sail);
+  padding-top: 4px;
+}
+
+.catalog-record dd { color: var(--mid); }
+
+.catalog-note {
+  margin-top: 24px;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--grey);
+}
+
+/* ---- steps ---- */
+
+.steps { list-style: none; counter-reset: step; }
+
+.steps li {
+  counter-increment: step;
+  padding: 24px 0 24px 56px;
+  position: relative;
+}
+
+.steps li + li { border-top: 1px solid var(--wall-2); }
+
+.steps li::before {
+  content: counter(step, upper-roman);
+  position: absolute;
+  left: 0; top: 28px;
+  font-family: "Iowan Old Style", Georgia, serif;
+  font-size: 1.125rem;
+  color: var(--sail);
+}
+
+.steps h2 { font-size: 1.625rem; font-weight: 500; }
+
+.steps p { color: var(--mid); margin-top: 8px; }
+
+/* ---- privacy ---- */
+
+.data-line { font-size: 1.625rem; line-height: 1.5; }
+
+.data-note { margin-top: 16px; color: var(--grey); font-size: 0.9375rem; }
+
+/* ---- download ---- */
+
+.download { text-align: center; }
+
+.button {
+  display: inline-block;
+  padding: 16px 48px;
+  background: var(--ink);
+  color: var(--wall);
+  border: 1px solid var(--ink);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 0.2s ease, color 0.2s ease; /* the one accent interaction */
+}
+
+.button:hover, .button:focus-visible { background: transparent; color: var(--ink); }
+
+.requirements { margin-top: 24px; color: var(--mid); font-size: 0.9375rem; }
+
+.smartscreen {
+  margin: 16px auto 0;
+  max-width: 30rem;
+  color: var(--grey);
+  font-size: 0.875rem;
+}
+
+/* ---- footer ---- */
+
+footer {
+  border-top: 1px solid var(--bone);
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--mid);
+  font-size: 0.875rem;
+}
+
+footer a { color: var(--mid); }
+footer a:hover { color: var(--ink); }
+
+/* ---- mobile ---- */
+
+@media (max-width: 44rem) {
+  .hero { padding: 80px 24px 64px; }
+  .lede, .body-large, .data-line { font-size: 1.375rem; }
+  section:not(.hero):not(.exhibit) { padding: 64px 24px; }
+  .exhibit { padding-bottom: 80px; }
+  .frame { padding: 8px; }
+  .catalog { padding: 24px 16px; }
+  .catalog-command { font-size: 1.375rem; }
+  .catalog-record div { flex-direction: column; gap: 4px; }
+}

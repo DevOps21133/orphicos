@@ -1,0 +1,217 @@
+/* Variant B — "Terminal heritage".
+   Dark charcoal, monospace for the machine's voice, serif only for the wordmark
+   and headline. History of computing, current hardware.
+   Hues sampled from landing/assets/src/hero-banner.png; derived shades mix a
+   sampled hue with black/white only. Spacing: 8px rhythm. 2 fonts. Zero JS. */
+
+:root {
+  --ink: #282c31;      /* sampled: wave shadow (1700,400) */
+  --ink-deep: #1c1f23; /* --ink + black ~30% — terminal well */
+  --ink-2: #31353a;    /* --ink + white ~6% — hairlines/bars */
+  --mid: #6b6b6e;      /* sampled: storm grey (150,100) */
+  --grey: #81807e;     /* sampled: sky grey (950,100) */
+  --light: #afaeae;    /* sampled: cloud grey (1500,60) */
+  --sail: #b1a397;     /* sampled: sail bone (750,250) */
+  --bone: #bab6a7;     /* sampled: calm water (1150,460) */
+  --ivory: #d3d0c5;    /* --bone + white ~35% — headline */
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--ink);
+  color: var(--light);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
+  font-size: 1rem; /* 16px body */
+  line-height: 1.7;
+  overflow-x: hidden;
+}
+
+h1, .wordmark {
+  font-family: "Iowan Old Style", Georgia, "Times New Roman", serif;
+  color: var(--ivory);
+  font-weight: 500;
+}
+
+/* ---- masthead ---- */
+
+.masthead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+.wordmark { font-size: 1.5rem; }
+
+.masthead-note { font-size: 0.75rem; color: var(--mid); letter-spacing: 0.08em; }
+
+/* ---- hero ---- */
+
+.hero {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 112px 24px 96px;
+}
+
+h1 {
+  font-size: clamp(3rem, 8vw, 7rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+.lede {
+  margin-top: 32px;
+  font-size: 1.5rem;   /* 1.5x body */
+  color: var(--grey);
+  max-width: 40rem;
+}
+
+/* ---- terminal ---- */
+
+.terminal-section {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 0 24px 120px;
+}
+
+.terminal {
+  background: var(--ink-deep);
+  border: 1px solid var(--ink-2);
+}
+
+.terminal-bar {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--ink-2);
+  color: var(--mid);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+}
+
+.terminal-body {
+  padding: 24px;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  line-height: 1.8;
+  color: var(--light);
+  overflow-x: auto;
+}
+
+.prompt { color: var(--sail); }
+.dim    { color: var(--mid); }
+.key    { color: var(--bone); }
+.ok     { color: var(--ivory); }
+
+/* the one accent interaction: a patient cursor */
+.caret {
+  display: inline-block;
+  width: 0.6em; height: 1.1em;
+  vertical-align: text-bottom;
+  background: var(--sail);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .caret { animation: blink 1.2s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+}
+
+.terminal-caption {
+  margin-top: 24px;
+  color: var(--grey);
+  font-size: 1rem;
+}
+
+/* ---- sections ---- */
+
+.how, .privacy, .download {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 96px 24px;
+  border-top: 1px solid var(--ink-2);
+}
+
+h2 {
+  font-family: inherit;
+  font-size: 1.5rem;   /* 1.5x body */
+  font-weight: 600;
+  color: var(--ivory);
+  margin-bottom: 40px;
+}
+
+.h-index {
+  color: var(--sail);
+  margin-right: 16px;
+  font-weight: 400;
+}
+
+/* ---- steps ---- */
+
+.steps { list-style: none; }
+
+.steps li { padding: 16px 0; }
+
+.steps li + li { border-top: 1px solid var(--ink-2); }
+
+.mono {
+  display: inline-block;
+  min-width: 8rem;
+  color: var(--bone);
+}
+
+.steps p { display: inline; color: var(--grey); }
+
+/* ---- privacy ---- */
+
+.data-line { font-size: 1.5rem; line-height: 1.6; color: var(--ivory); }
+
+.data-note { margin-top: 16px; color: var(--mid); font-size: 0.875rem; }
+
+/* ---- download ---- */
+
+.early { color: var(--sail); letter-spacing: 0.16em; margin-bottom: 24px; font-size: 0.875rem; }
+
+.button {
+  display: inline-block;
+  padding: 16px 40px;
+  border: 1px solid var(--bone);
+  color: var(--bone);
+  font-family: inherit;
+  font-size: 1rem;
+  text-decoration: none;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.button:hover, .button:focus-visible { background: var(--bone); color: var(--ink); }
+
+.requirements { margin-top: 24px; color: var(--light); font-size: 0.875rem; }
+
+.smartscreen { margin-top: 16px; max-width: 34rem; color: var(--mid); font-size: 0.875rem; }
+
+/* ---- footer ---- */
+
+footer {
+  border-top: 1px solid var(--ink-2);
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--mid);
+  font-size: 0.875rem;
+}
+
+footer a { color: var(--grey); }
+footer a:hover { color: var(--bone); }
+
+/* ---- mobile ---- */
+
+@media (max-width: 44rem) {
+  .hero { padding: 64px 24px; }
+  .lede, .data-line { font-size: 1.25rem; }
+  .how, .privacy, .download { padding: 64px 24px; }
+  .terminal-section { padding-bottom: 80px; }
+  .terminal-body { font-size: 0.8125rem; }
+  .mono { display: block; min-width: 0; margin-bottom: 8px; }
+  .steps p { display: block; }
+}
