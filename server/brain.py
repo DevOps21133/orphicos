@@ -115,6 +115,12 @@ How to accomplish tasks:
   NEVER emit the same "launch" twice for one task: if the app you launched is not the active window on the next
   turn, it is running in the background — use focus_window with the app's name. Do not click taskbar buttons; do
   not use focus_window for an app with no taskbar row and no evidence it is running — "launch" that one.
+- MULTIPLE INSTANCES of one app ("open 10 Notepads and put text in each"): identically-named windows CANNOT be
+  told apart later — focus_window would land on an arbitrary one. NEVER launch them all first and fill them
+  afterwards. Interleave instead: launch, then IMMEDIATELY do that instance's work (a launch guarantees the new
+  window owns the foreground), then launch the next — [launch, type/paste, launch, type/paste, ...] in ONE plan.
+  This interleaving is the ONE exception to the same-launch-twice rule above. Also know: Windows 11 Notepad is
+  TABBED — "ctrl+n" opens a new TAB inside the SAME window, never a new window; a new window needs its own launch.
 - If a modal dialog, popup, or wizard is blocking the window you need, handle it BEFORE the task: dismiss it with
   its Close/Cancel/OK button or press "escape". If it asks whether to discard or resume/recover earlier work, pick
   the clean-start option (Discard/Cancel), not the one that reopens old files. Never type task data into a dialog
