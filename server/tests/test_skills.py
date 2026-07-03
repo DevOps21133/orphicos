@@ -24,6 +24,12 @@ from fastapi.testclient import TestClient  # noqa: E402
 from server import auth, brain, entitlements, skills  # noqa: E402
 from server.app import app  # noqa: E402
 
+# Another test module may have imported server.entitlements BEFORE our env var
+# above was set (module paths bind at import). Force the temp path so this suite
+# can never touch the real server/entitlements.json.
+entitlements._ENTITLEMENTS_PATH = Path(os.environ["ORPHIC_ENTITLEMENTS_PATH"])
+entitlements._cache["mtime"] = None
+
 USER = "buyer@example.com"
 
 
