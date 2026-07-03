@@ -11,7 +11,7 @@ for that element's live centre coordinates.
 """
 from __future__ import annotations
 
-from time import sleep
+from time import monotonic, sleep
 
 from client._engine import Desktop, escape_text_for_sendkeys, uia
 from client.act._focus_guard import foreground_console_label
@@ -98,7 +98,33 @@ class Actor:
         name = value or action.get("target_selector")
         if not name:
             raise ActionError("launch needs an app name in 'value'")
-        return str(self._desktop.app(mode="launch", name=str(name)))
+        result = str(self._desktop.app(mode="launch", name=str(name)))
+        self._ensure_foreground(str(name))
+        return result
+
+    def _ensure_foreground(self, app_name: str, timeout: float = 6.0) -> None:
+        """The brain's contract says a launched app IS the foreground window, but the
+        engine's launch returns before the window exists, and focus can bounce back to
+        the previous window (e.g. the browser hosting the shell). Without this, the
+        next perceive shows the OLD window and the brain relaunches in a loop. Poll
+        until the app owns the foreground; halfway through, try an explicit switch."""
+        want = app_name.strip().lower()
+        deadline = monotonic() + timeout
+        tried_switch = False
+        while monotonic() < deadline:
+            sleep(0.4)
+            state = self._desktop.get_state()
+            active = (state.active_window.name if state.active_window else "") or ""
+            if want in active.lower():
+                return
+            if not tried_switch and (deadline - monotonic()) < timeout / 2:
+                tried_switch = True
+                try:
+                    self._desktop.app(mode="switch", name=app_name)
+                except Exception:  # noqa: BLE001 — window may not exist yet; keep polling
+                    pass
+        # Never fail the launch over focus: the loop re-perceives and the brain
+        # can still recover with focus_window.
 
     def _do_focus_window(self, action: dict, value) -> str:
         name = value or action.get("target_selector")

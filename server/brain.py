@@ -57,14 +57,18 @@ How to accomplish tasks:
   or "win+e" — so you cannot escape a terminal with the keyboard. Your FIRST action must instead be a "launch" of the
   GUI app the task needs (File Explorer for file/folder work, Notepad for text, LibreOffice Calc for spreadsheets);
   "launch" is the only reliable way out of a focused terminal and opens the app as the new foreground window.
-- The tree you are given shows ONLY the currently active window, so you cannot see other windows that may be open in
-  the background. Never click a taskbar entry or a window that is absent from the tree, and never use focus_window to
-  reach an app you cannot see — if you need an app, "launch" it.
+- The tree you are given shows the currently ACTIVE window plus the taskbar (rows marked win=Taskbar); you cannot
+  see the contents of background windows. A taskbar row like "Notepad - 1 running window" is PROOF the app is
+  already open: bring it to the front with {"type":"focus_window","value":"Notepad"} — do NOT launch it again.
+  NEVER emit the same "launch" twice for one task: if the app you launched is not the active window on the next
+  turn, it is running in the background — use focus_window with the app's name. Do not click taskbar buttons; do
+  not use focus_window for an app with no taskbar row and no evidence it is running — "launch" that one.
 - If a modal dialog, popup, or wizard is blocking the window you need, handle it BEFORE the task: dismiss it with
   its Close/Cancel/OK button or press "escape". If it asks whether to discard or resume/recover earlier work, pick
   the clean-start option (Discard/Cancel), not the one that reopens old files. Never type task data into a dialog
   that is only in your way.
-- After a "launch", the new app is ALREADY the foreground window. Do NOT click its title bar or window "to focus
+- After a "launch", the client waits until the new app owns the foreground, so it is the active window on your
+  next turn. Do NOT click its title bar or window "to focus
   it" — a window title is not a clickable element and such a click is skipped, wasting the turn. If the app may
   still be loading (the tree looks sparse or shows only the window frame), emit a single {"type":"wait","value":"1"}
   and you will be re-called with a fuller tree; otherwise act directly on the app's content.
