@@ -55,6 +55,13 @@ class GateTests(unittest.TestCase):
     def test_ctrl_enter_chord_is_risky_send(self):
         self.assertEqual(gate.action_needs_approval({"type": "press", "value": "ctrl+enter"}), "send")
 
+    def test_alt_f4_chord_is_risky_close(self):
+        self.assertEqual(gate.action_needs_approval({"type": "press", "value": "alt+f4"}), "close")
+
+    def test_win_l_chord_is_risky_lock(self):
+        # Locking the session kills the whole run — a human must want that.
+        self.assertEqual(gate.action_needs_approval({"type": "press", "value": "win+l"}), "lock")
+
     def test_typing_the_letters_del_is_not_risky(self):
         # Typing d-e-l into a document is not a delete; only key-press actions count.
         self.assertIsNone(gate.action_needs_approval({"type": "type", "value": "del"}))

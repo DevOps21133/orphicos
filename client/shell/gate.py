@@ -23,7 +23,11 @@ _RISK_RE = re.compile(r"\b(" + "|".join(RISK_VERBS) + r")\b", re.IGNORECASE)
 # so this is checked for key-press actions only.
 _KEY_ACTION_TYPES = frozenset({"press", "hotkey", "shortcut", "key", "keypress"})
 _RISK_KEY_TOKENS = {"del": "delete"}          # any chord containing this key is risky
-_RISK_KEY_CHORDS = {frozenset({"ctrl", "enter"}): "send"}  # exact-chord matches
+_RISK_KEY_CHORDS = {                          # exact-chord matches
+    frozenset({"ctrl", "enter"}): "send",     # near-universal send/submit
+    frozenset({"alt", "f4"}): "close",        # closes the active window (may lose work)
+    frozenset({"win", "l"}): "lock",          # locks the session — kills the whole run
+}
 
 
 def command_has_risk(command: str) -> list[str]:
