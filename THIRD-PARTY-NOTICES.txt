@@ -229,6 +229,17 @@ The push-to-talk hotkey (client/voice/ptt.py) uses the Win32 API directly via
 ctypes (Python stdlib) — no third-party hotkey library was added.
 
 --------------------------------------------------------------------------------
+Demo asset generation   (demo/make_invoices.py; Phase 4 — dev-only, never shipped)
+--------------------------------------------------------------------------------
+Installed 2026-07-03 into the client venv. Used only to generate the Phase 4 demo
+input PDFs (the dummy invoices OrphicOS reads during the flagship task); it is not
+imported by any client/ or server/ product path and is excluded from the shipped
+client (packaging/verify_dist.py territory — a build-time author tool, like PyInstaller).
+
+  reportlab   5.0.0   BSD license   https://www.reportlab.com/
+      Copyright (c) 2000-2025, ReportLab Inc. PDF generation for demo/make_invoices.py.
+
+--------------------------------------------------------------------------------
 Landing hero artwork          (landing/assets/)
 --------------------------------------------------------------------------------
 Landing hero artwork: AI-generated (Google Gemini), created by the founder,
