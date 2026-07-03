@@ -104,7 +104,10 @@ async def health() -> dict[str, str]:
 
 
 @app.post("/command", response_model=CommandResponse)
-async def command(req: CommandRequest, user_id: str = Depends(current_user)) -> CommandResponse:
+def command(req: CommandRequest, user_id: str = Depends(current_user)) -> CommandResponse:
+    # Deliberately sync: FastAPI runs sync endpoints on the threadpool, so the
+    # blocking LLM call cannot freeze the event loop. (As `async def` it did —
+    # one slow/hung provider call stalled /health and every other user's step.)
     t0 = time.monotonic()
     try:
         decision, usage = brain.decide(req.command, req.ui_tree, req.state, req.screenshot)
