@@ -57,11 +57,12 @@ def main() -> int:
     # Global kill switch: halt the active run even if the UI is buried (§9.3).
     def panic() -> None:
         hub = app.state.hub
-        session = hub.active  # capture: the worker thread may clear it as a run ends
-        if session is not None:
-            session.stop()
+        _session, dropped = hub.stop_all()  # halts the run AND discards queued commands
         chord = app.state.kill_label or "kill switch"
-        hub.emit({"type": "status", "message": f"Kill switch pressed ({chord})."})
+        note = f" {dropped} queued command(s) discarded." if dropped else ""
+        hub.emit({"type": "status", "message": f"Kill switch pressed ({chord}).{note}"})
+        if dropped:
+            hub.emit({"type": "queue", "commands": []})
 
     hotkey = GlobalKillHotkey(panic)
     armed = hotkey.start()  # may fall back to another chord, or None if all are taken

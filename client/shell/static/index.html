@@ -77,6 +77,7 @@
   .banner.show { display: block; }
   .banner.warn { background: rgba(255,180,84,0.12); border: 1px solid rgba(255,180,84,0.4); color: var(--warn); }
   .banner.err  { background: rgba(255,92,108,0.12);  border: 1px solid rgba(255,92,108,0.4);  color: var(--bad); }
+  .banner.next { background: rgba(108,140,255,0.10); border: 1px solid rgba(108,140,255,0.35); color: var(--accent); }
 
   .feed { display: flex; flex-direction: column; gap: 12px; }
   .step {
@@ -154,6 +155,7 @@
     </div>
     <div id="flag" class="banner warn"></div>
     <div id="err" class="banner err"></div>
+    <div id="qbar" class="banner next"></div>
 
     <div class="feed" id="feed">
       <div class="empty" id="empty">
@@ -186,7 +188,7 @@
   const feed = $("feed"), empty = $("empty");
   const runBtn = $("run"), cmd = $("cmd");
   const pill = $("pill"), pillText = $("pillText");
-  const flag = $("flag"), errBanner = $("err");
+  const flag = $("flag"), errBanner = $("err"), qbar = $("qbar");
   const overlay = $("overlay"), mVerb = $("mVerb"), mWhat = $("mWhat");
   const stopHint = $("stopHint");
   const mic = $("mic");
@@ -267,9 +269,17 @@
   }
 
   function setRunning(on) {
+    // The bar stays live while a command runs: submitting then QUEUES the new command
+    // behind the current one (the server serializes them — never two runs at once).
     running = on;
-    runBtn.disabled = on;
-    runBtn.textContent = on ? "Running…" : "Run";
+    runBtn.textContent = on ? "Queue" : "Run";
+    runBtn.title = on ? "A command is running — this one will run right after it" : "";
+  }
+
+  function renderQueue(commands) {
+    if (!commands.length) { qbar.classList.remove("show"); return; }
+    qbar.textContent = "Up next: " + commands.map((c, i) => (i + 1) + ") “" + c + "”").join("   ");
+    qbar.classList.add("show");
   }
 
   function showError(msg) {
@@ -290,6 +300,7 @@
   function handle(ev) {
     switch (ev.type) {
       case "run_started":
+        setRunning(true);
         addDivider("“" + ev.command + "”");
         if (ev.flagged && ev.flagged.length) {
           flag.textContent = "Heads up: this command mentions " + ev.flagged.join(", ") +
@@ -313,6 +324,12 @@
         setRunning(false);
         addSystem(finishedLabel(ev.outcome));
         break;
+      case "queued":
+        addSystem("Queued (#" + ev.position + "): “" + ev.command + "” — runs when the current command finishes.");
+        break;
+      case "queue":
+        renderQueue(ev.commands || []);
+        break;
       case "status":
         addSystem(ev.message);
         break;
@@ -329,8 +346,9 @@
         addSystem("Heard: “" + ev.text + "” — review it, then press Enter to run.");
         break;
       case "error":
+        // Button state is event-driven (run_started/run_finished) — a validation
+        // error must not relabel the button while another command is mid-run.
         showError(ev.message);
-        setRunning(false);
         break;
     }
   }
@@ -372,10 +390,9 @@
 
   function submit() {
     const text = cmd.value.trim();
-    if (!text || running) return;
-    setRunning(true);
+    if (!text) return;
     send({ type: "run", command: text });
-    cmd.value = "";
+    cmd.value = "";  // cleared immediately, so a double-Enter can't submit twice
   }
 
   function setVoiceState(state) {

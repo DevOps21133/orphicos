@@ -207,6 +207,7 @@ class ShellAppTests(unittest.TestCase):
             self.assertTrue(body["connected"])
             self.assertEqual(body["server_base"], "http://localhost:8000")
             self.assertFalse(body["running"])
+            self.assertEqual(body["queued"], 0)
 
         app_down = create_app(submit=lambda s, d: None, health_check=lambda: False)
         with TestClient(app_down) as client:
@@ -249,19 +250,52 @@ class ShellAppTests(unittest.TestCase):
                 ev = ws.receive_json()
                 self.assertEqual(ev["type"], "error")
 
-    def test_ws_rejects_second_concurrent_run(self):
-        # A submitter that never completes keeps hub.active set, so a second run is refused.
+    def test_ws_queues_second_command_and_runs_it_when_first_finishes(self):
+        # One command at a time: a submission mid-run queues FIFO and starts only
+        # when its predecessor finishes — it must NOT reach the worker before that.
         submitted = []
-        app = create_app(submit=lambda s, d: submitted.append(s), health_check=lambda: True)
+        app = create_app(submit=lambda s, d: submitted.append((s, d)), health_check=lambda: True)
         with TestClient(app) as client:
             with client.websocket_connect("/ws") as ws:
                 ws.send_json({"type": "run", "command": "first"})
                 self.assertEqual(ws.receive_json()["type"], "run_started")
                 ws.send_json({"type": "run", "command": "second"})
-                ev = ws.receive_json()
-                self.assertEqual(ev["type"], "error")
-                self.assertIn("already running", ev["message"])
-        self.assertEqual(len(submitted), 1)
+                queued = ws.receive_json()
+                self.assertEqual(queued["type"], "queued")
+                self.assertEqual(queued["position"], 1)
+                self.assertEqual(ws.receive_json(), {"type": "queue", "commands": ["second"]})
+                self.assertEqual(len(submitted), 1)          # second not submitted yet
+                submitted[0][1]("done")                      # first finishes (worker thread)
+                self.assertEqual(ws.receive_json()["type"], "run_finished")
+                self.assertEqual(ws.receive_json(), {"type": "queue", "commands": []})
+                started = ws.receive_json()
+                self.assertEqual(started["type"], "run_started")
+                self.assertEqual(started["command"], "second")
+        self.assertEqual(len(submitted), 2)
+        self.assertEqual(submitted[1][0].command, "second")
+
+    def test_stop_discards_the_queue(self):
+        # The kill switch halts the active run AND drops queued commands — a queued
+        # command silently starting right after a panic press would be a betrayal.
+        submitted = []
+        app = create_app(submit=lambda s, d: submitted.append((s, d)), health_check=lambda: True)
+        with TestClient(app) as client:
+            with client.websocket_connect("/ws") as ws:
+                ws.send_json({"type": "run", "command": "first"})
+                self.assertEqual(ws.receive_json()["type"], "run_started")
+                ws.send_json({"type": "run", "command": "second"})
+                self.assertEqual(ws.receive_json()["type"], "queued")
+                self.assertEqual(ws.receive_json()["type"], "queue")
+                ws.send_json({"type": "stop"})
+                status = ws.receive_json()
+                self.assertEqual(status["type"], "status")
+                self.assertIn("discarded", status["message"])
+                self.assertEqual(ws.receive_json(), {"type": "queue", "commands": []})
+                self.assertTrue(submitted[0][0].should_stop())  # active run got the stop
+                submitted[0][1]("stopped")                      # worker reports the halt
+                self.assertEqual(ws.receive_json()["type"], "run_finished")
+                self.assertEqual(ws.receive_json(), {"type": "queue", "commands": []})
+        self.assertEqual(len(submitted), 1)                     # "second" never ran
 
     def test_ws_rejects_cross_origin_handshake(self):
         # CSWSH defense: a socket from a foreign origin must be refused before it can drive.
@@ -277,7 +311,7 @@ class ShellAppTests(unittest.TestCase):
                 self.assertEqual(ws.receive_json()["type"], "error")
 
     def test_validation_error_reaches_only_the_requesting_tab(self):
-        # Two tabs open; a second tab's "already running" error must NOT reset tab one.
+        # Two tabs open; a second tab's validation error must NOT reset tab one.
         submitted = []
         app = create_app(submit=lambda s, d: submitted.append(s), health_check=lambda: True)
         with TestClient(app) as client:
@@ -285,7 +319,7 @@ class ShellAppTests(unittest.TestCase):
                 ws1.send_json({"type": "run", "command": "first"})
                 self.assertEqual(ws1.receive_json()["type"], "run_started")  # broadcast
                 self.assertEqual(ws2.receive_json()["type"], "run_started")  # broadcast
-                ws2.send_json({"type": "run", "command": "second"})
+                ws2.send_json({"type": "run", "command": "   "})
                 self.assertEqual(ws2.receive_json()["type"], "error")        # sender only
                 # Tab one's next event is its own stop's status — proving the error skipped it.
                 ws1.send_json({"type": "stop"})

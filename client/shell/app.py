@@ -4,8 +4,10 @@ Serves the single-page shell (command bar, live log, kill switch, approval gate)
 WebSocket that streams each perceive->decide->act step as it happens, so the brain's
 think time reads as visible progress. The desktop is driven on a dedicated worker thread
 (runner.DesktopWorker); this async layer only relays commands and fans events out to
-every connected browser. No LLM/provider anything lives here — the client stays
-brain-less (Rules 1 & 6).
+every connected browser. One command runs at a time: submissions that arrive mid-run
+queue FIFO in the Hub and start when their predecessor finishes; the kill switch stops
+the active run AND discards the queue. No LLM/provider anything lives here — the client
+stays brain-less (Rules 1 & 6).
 
 create_app() takes its desktop `submit` and brain `health_check` as injected callables,
 so the WebSocket->loop->events path can be exercised in tests with fakes (no live
@@ -14,6 +16,8 @@ desktop, no network) — the real app injects the DesktopWorker and BrainClient.
 from __future__ import annotations
 
 import asyncio
+import threading
+from collections import deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Callable, Optional
@@ -37,6 +41,8 @@ class Hub:
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._queue: Optional[asyncio.Queue] = None
         self.active: Optional[RunSession] = None
+        self._pending: deque[RunSession] = deque()  # commands waiting their turn, FIFO
+        self._qlock = threading.Lock()
 
     def bind(self, loop: asyncio.AbstractEventLoop, q: asyncio.Queue) -> None:
         self._loop, self._queue = loop, q
@@ -59,6 +65,43 @@ class Hub:
 
     def remove(self, ws: WebSocket) -> None:
         self._conns.discard(ws)
+
+    # --- one-command-at-a-time queue -----------------------------------------
+    # The desktop is a single shared surface: two commands interleaving their clicks
+    # would fight over focus. One command runs at a time; anything submitted while it
+    # runs queues FIFO and starts only when its predecessor finishes. The lock guards
+    # active/_pending against the WebSocket handler (event loop) and the desktop
+    # worker (its own thread) transitioning them concurrently.
+
+    def admit(self, session: RunSession) -> int:
+        """Claim the desktop for this session (0 = run now) or queue it (1-based position)."""
+        with self._qlock:
+            if self.active is None:
+                self.active = session
+                return 0
+            self._pending.append(session)
+            return len(self._pending)
+
+    def finish_active(self) -> Optional[RunSession]:
+        """Retire the finished run; promote and return the next queued session, if any."""
+        with self._qlock:
+            self.active = self._pending.popleft() if self._pending else None
+            return self.active
+
+    def stop_all(self) -> tuple[Optional[RunSession], int]:
+        """Kill switch: discard everything queued FIRST, then stop the active run —
+        a queued command silently starting right after a panic press would be a betrayal."""
+        with self._qlock:
+            dropped = len(self._pending)
+            self._pending.clear()
+            session = self.active
+        if session is not None:
+            session.stop()
+        return session, dropped
+
+    def queued_commands(self) -> list[str]:
+        with self._qlock:
+            return [s.command for s in self._pending]
 
 
 def create_app(submit: SubmitFn, health_check: Callable[[], bool],
@@ -106,6 +149,7 @@ def create_app(submit: SubmitFn, health_check: Callable[[], bool],
         return JSONResponse({"connected": bool(connected),
                              "server_base": server_base,
                              "running": hub.active is not None,
+                             "queued": len(hub.queued_commands()),
                              "kill_hotkey": app.state.kill_label,
                              "voice": voice is not None,
                              "voice_hotkey": getattr(voice, "HOTKEY", None)})
@@ -152,28 +196,40 @@ async def _handle(msg: dict, hub: Hub, submit: SubmitFn, ws: WebSocket,
         if not command:
             await ws.send_json({"type": "error", "message": "Type a command first."})
             return
-        if hub.active is not None:
-            await ws.send_json({"type": "error", "message": "A command is already running."})
-            return
         session = RunSession(command, hub.emit)
-        hub.active = session
-        hub.emit({"type": "run_started", "command": command,
-                  "flagged": gate.command_has_risk(command)})
-
-        def on_done(outcome: str) -> None:  # called on the worker thread when the run ends
-            hub.active = None
-            hub.emit({"type": "run_finished", "outcome": outcome})
-
-        submit(session, on_done)
+        position = hub.admit(session)
+        if position:
+            # Real state, not a validation error: every tab should see the queue grow.
+            hub.emit({"type": "queued", "command": command, "position": position})
+            hub.emit({"type": "queue", "commands": hub.queued_commands()})
+        else:
+            _start_session(session, hub, submit)
 
     elif kind == "stop":
-        session = hub.active  # capture: the worker thread may clear it as a run ends
+        session, dropped = hub.stop_all()
         if session is not None:
-            session.stop()
-            hub.emit({"type": "status", "message": "Stopping…"})
+            note = f" {dropped} queued command(s) discarded." if dropped else ""
+            hub.emit({"type": "status", "message": f"Stopping…{note}"})
+            if dropped:
+                hub.emit({"type": "queue", "commands": []})
 
     elif kind == "approve":
         session = hub.active
         if session is not None:
             session.resolve_approval(int(msg.get("id", 0)),
                                      msg.get("decision") == "approve")
+
+
+def _start_session(session: RunSession, hub: Hub, submit: SubmitFn) -> None:
+    """Announce and launch a session; when it finishes, promote the next queued one."""
+    hub.emit({"type": "run_started", "command": session.command,
+              "flagged": gate.command_has_risk(session.command)})
+
+    def on_done(outcome: str) -> None:  # called on the worker thread when the run ends
+        hub.emit({"type": "run_finished", "outcome": outcome})
+        nxt = hub.finish_active()
+        hub.emit({"type": "queue", "commands": hub.queued_commands()})
+        if nxt is not None:
+            _start_session(nxt, hub, submit)
+
+    submit(session, on_done)
