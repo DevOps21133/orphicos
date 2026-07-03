@@ -98,6 +98,39 @@ def serialize_tree(active_window: str, nodes: list) -> str:
     return "\n".join(rows)
 
 
+def serialize_windows(windows: list, active_name: str) -> str:
+    """List every open top-level window as its OWN section above the tree.
+
+    The tree itself shows only the ACTIVE window's contents plus taskbar buttons,
+    and a taskbar button cannot distinguish an app that is RUNNING from one merely
+    pinned. That gap is exactly what makes the brain re-"launch" an already-open app
+    and clobber the user's document (the launch trap). An explicit list of the real
+    open windows removes the ambiguity — a name here means "already running: focus
+    it, do not launch" — and gives the brain exact window titles to target for
+    focus_window / snap. Duplicate titles collapse to one row (identical windows
+    cannot be told apart anyway).
+    """
+    rows = []
+    seen = set()
+    active = _clean(active_name)
+    for w in windows:
+        name = _clean(getattr(w, "name", "") or "")
+        if not name:
+            continue
+        key = name.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        status = getattr(getattr(w, "status", None), "value", "") or ""
+        extra = f" ({status})" if status and status not in ("Normal", "") else ""
+        mark = " [active]" if name == active else ""
+        rows.append(f"- {name}{extra}{mark}")
+    if not rows:
+        return ""
+    return ("OPEN WINDOWS (already running — focus_window these, never launch them again):\n"
+            + "\n".join(rows))
+
+
 def _scroll_pos(metadata: dict | None) -> str:
     """Compact scroll position: `v=35%` (0%=top, 100%=bottom). UIA reports the
     percent as 0-100, or -1 when the pane cannot actually scroll right now."""
@@ -170,6 +203,9 @@ class Perceiver:
         nodes = tree.interactive_nodes or []
         active = state.active_window.name if state.active_window else "(no active window)"
         ui_tree = serialize_tree(active, nodes)
+        windows_block = serialize_windows(getattr(state, "windows", None) or [], active)
+        if windows_block:
+            ui_tree = f"{windows_block}\n\n{ui_tree}"
         scroll_block = serialize_scrollables(getattr(tree, "scrollable_nodes", None) or [])
         if scroll_block:
             ui_tree = f"{ui_tree}\n{scroll_block}"

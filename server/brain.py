@@ -118,11 +118,11 @@ How to accomplish tasks:
   GUI app the task needs (File Explorer for file/folder work, Notepad for text, LibreOffice Calc for spreadsheets);
   "launch" is the only reliable way out of a focused terminal and opens the app as the new foreground window.
 - The tree you are given shows the currently ACTIVE window plus the taskbar (rows marked win=Taskbar); you cannot
-  see the contents of background windows. A taskbar row like "Notepad - 1 running window" is PROOF the app is
-  already open: bring it to the front with {"type":"focus_window","value":"Notepad"} — do NOT launch it again.
-  NEVER emit the same "launch" twice for one task: if the app you launched is not the active window on the next
-  turn, it is running in the background — use focus_window with the app's name. Do not click taskbar buttons; do
-  not use focus_window for an app with no taskbar row and no evidence it is running — "launch" that one.
+  see the contents of background windows. Above the tree, an OPEN WINDOWS section lists EVERY window currently
+  running (with its real title, e.g. "shopping.txt - Notepad"). That list is authoritative: if an app appears
+  there it is ALREADY OPEN — bring it to the front with {"type":"focus_window","value":"<its title or app name>"}
+  and do NOT launch it again. Only "launch" an app that is absent from OPEN WINDOWS. NEVER emit the same "launch"
+  twice for one task. Do not click taskbar buttons to switch — use focus_window.
 - MULTIPLE INSTANCES of one app ("open 10 Notepads and put text in each"): identically-named windows CANNOT be
   told apart later — focus_window would land on an arbitrary one. NEVER launch them all first and fill them
   afterwards. Interleave instead: launch, then IMMEDIATELY do that instance's work (a launch guarantees the new
@@ -153,11 +153,11 @@ How to accomplish tasks:
   "ctrl+n" — or launch the app if it is not running. Work inside an existing window ONLY when the command
   explicitly targets what is open in it ("in this tab", "in the open document", "sum the column in this sheet").
   THE LAUNCH TRAP (applies to EVERY single-instance app — Notepad, Word, Excel, PowerPoint, File Explorer,
-  the browser): if the tree already shows a window of that app (e.g. a "Notepad" window holding the user's
+  the browser): if OPEN WINDOWS lists that app (e.g. a "shopping.txt - Notepad" window holding the user's
   text), do NOT "launch" it again to get a blank surface. Re-launching a single-instance app just FOCUSES the
   user's existing document, so your next "type" lands in THEIR work. When the app is already open, focus_window
-  it and press "ctrl+n" (browser: "ctrl+t") for a FRESH tab/document BEFORE typing. Only "launch" when no
-  window of that app appears in the tree.
+  it and press "ctrl+n" (browser: "ctrl+t") for a FRESH tab/document BEFORE typing. Only "launch" an app that
+  is ABSENT from OPEN WINDOWS.
 - To search the web or open a website, drive the BROWSER through its address bar (it doubles as a search box).
   FIRST decide where the work happens — the user's open tabs are THEIR workspace, never yours:
   * Browser NOT running (no taskbar row): launch it, press "ctrl+l" to focus the address bar of its start tab.
@@ -169,6 +169,11 @@ How to accomplish tasks:
   when the task then wants a capture, append the screenshot to the SAME plan, e.g. [focus_window "browser",
   press "ctrl+t", type "Mercedes car", press "enter", wait "2", screenshot] with done=true. Never click a search
   box by name (page elements are often missing from the tree) — the address bar always works.
+- LIVE VALUES COME FROM THE PAGE, NEVER FROM MEMORY. When the task needs a current fact — a price, exchange
+  rate, score, weather, headline — your own training data is stale and WRONG. You MUST search, let the page
+  render (wait "2"), then READ the actual number from the resulting tree (or request a screenshot if the value
+  is drawn on a canvas) and use THAT value in the next step. End the plan with done=false after the search so
+  you get the rendered page back; do not type a remembered number into a document as if it were current.
 - For file/folder operations, launch "File Explorer" first, then navigate to the target folder BEFORE creating
   anything. Navigate with the ADDRESS BAR — never by clicking a "Desktop" entry in the navigation pane, a breadcrumb,
   or a tab: several elements can share that name, a click may hit the wrong one or not change the view at all, and
@@ -186,6 +191,12 @@ How to accomplish tasks:
 - Then create and rename in that SAME response, using keyboard shortcuts (not the small ribbon/toolbar buttons):
   press "ctrl+shift+n", wait "1" (the new folder's rename box takes a moment to appear), type the folder name, press
   "enter"; then press "f2", wait "1", type the new name, press "enter".
+- SELECTING A SUBSET OF FILES (e.g. "all the .png files", "every file starting with invoice"): do NOT press
+  "ctrl+a" — that grabs the WHOLE folder, including files the task must not touch. Instead FILTER first: press
+  "ctrl+e" to focus the File Explorer search box, type the pattern ("*.png", "invoice*"), press "enter", and
+  wait "1" for the list to filter. Only the matching files now remain shown, so "ctrl+a" (after clicking one
+  result to focus the file list) selects exactly those and nothing else. Use plain "ctrl+a" only when the task
+  really does mean every file in the folder.
 - SAVE/OPEN DIALOGS (same recipe for every app): never click-navigate the folder tree inside a Save/Open
   dialog. After the "ctrl+s" / "ctrl+o" that opens it, FIRST wait for the dialog with
   {"type":"wait_for","value":"Save As"} (use "Open" for ctrl+o) — this barrier stops the app's own text from

@@ -30,7 +30,9 @@ class ControlFlowTests(unittest.TestCase):
         return run_command("do a thing", desktop, brain, max_steps, on_event)
 
     def test_done_on_first_step(self):
-        desktop = FakeDesktop(node_names=["Save"], active_window="Untitled - Notepad")
+        # active_window is the empty desktop, so "launch notepad" is a real launch
+        # (not the already-open fresh-surface path — that is covered in test_actor).
+        desktop = FakeDesktop(node_names=["Save"], active_window="Desktop")
         brain = FakeBrain([_decision([LAUNCH], done=True)])
         outcome = self._run(desktop, brain)
         self.assertEqual(outcome, "done")

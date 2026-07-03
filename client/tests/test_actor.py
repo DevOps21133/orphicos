@@ -82,6 +82,12 @@ class ActionDispatchTests(unittest.TestCase):
     def setUp(self) -> None:
         self.desktop = FakeDesktop(node_names=["Save", "Cancel", "Text editor"])
         self.actor = Actor(self.desktop)
+        # _ensure_foreground polls the LIVE desktop until a window owns the foreground;
+        # these tests assert DISPATCH (which engine call is made), not that polling, so
+        # stub it to a no-op — otherwise it spins to its timeout against the fake.
+        p = patch.object(Actor, "_ensure_foreground", lambda self, name, timeout=6.0: None)
+        p.start()
+        self.addCleanup(p.stop)
 
     def test_every_allowlisted_verb_has_a_handler(self):
         for verb in EXPECTED_VERBS:
@@ -178,6 +184,51 @@ class ActionDispatchTests(unittest.TestCase):
         self.actor.execute({"type": "focus_window", "value": "Book1 - Excel"})
         self.assertIn(("app", "switch", "Book1 - Excel"), self.desktop.calls)
 
+    def test_launch_of_open_doc_app_opens_fresh_document_not_hijack(self):
+        # THE LAUNCH TRAP: Notepad already holds the user's text. "launch Notepad"
+        # must focus it and open a FRESH document (ctrl+n) — never re-launch, which
+        # would drop the next type into their existing work.
+        desktop = FakeDesktop(node_names=[], active_window="shopping.txt - Notepad")
+        result = Actor(desktop).execute({"type": "launch", "value": "Notepad"})
+        self.assertIn(("app", "switch", "Notepad"), desktop.calls)
+        self.assertIn(("shortcut", "ctrl+n"), desktop.calls)
+        self.assertFalse(any(c[0] == "app" and c[1] == "launch" for c in desktop.calls))
+        self.assertIn("fresh", result)
+
+    def test_launch_of_open_browser_opens_new_tab(self):
+        # Same protection, browser flavour: a fresh TAB (ctrl+t), not a new document.
+        desktop = FakeDesktop(node_names=[], active_window="Inbox - Google Chrome")
+        Actor(desktop).execute({"type": "launch", "value": "Google Chrome"})
+        self.assertIn(("shortcut", "ctrl+t"), desktop.calls)
+        self.assertFalse(any(c[0] == "app" and c[1] == "launch" for c in desktop.calls))
+
+    def test_launch_when_app_not_open_launches_normally(self):
+        # No window of the app is open -> a real launch, even for a fresh-surface app.
+        self.actor.execute({"type": "launch", "value": "Notepad"})
+        self.assertIn(("app", "launch", "Notepad"), self.desktop.calls)
+        self.assertFalse(any(c[0] == "shortcut" for c in self.desktop.calls))
+
+    def test_failed_launch_aborts_the_batch(self):
+        # A launch that can't start the app must RAISE, so the plan's following
+        # type/press never fire into the wrong window (failed "launch Excel" must
+        # not type a formula into whatever is focused — the Calculator bug).
+        desktop = FakeDesktop(node_names=[])
+        desktop.app = lambda mode, name=None, loc=None: (  # engine reports failure
+            desktop.calls.append(("app", mode, name)) or f"{name} not found in start menu.")
+        with self.assertRaises(ActionError) as ctx:
+            Actor(desktop).execute({"type": "launch", "value": "Excel"})
+        self.assertIn("could not launch", str(ctx.exception))
+
+    def test_failed_focus_window_aborts_the_batch(self):
+        # Same abort contract for focus_window: a missing target must not let the
+        # next snap/type hit the wrong window.
+        desktop = FakeDesktop(node_names=[])
+        desktop.app = lambda mode, name=None, loc=None: (
+            desktop.calls.append(("app", mode, name)) or f"Application {name} not found.")
+        with self.assertRaises(ActionError) as ctx:
+            Actor(desktop).execute({"type": "focus_window", "value": "Ghost"})
+        self.assertIn("could not focus", str(ctx.exception))
+
 
 class ScreenshotTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -229,27 +280,30 @@ class ScreenshotTests(unittest.TestCase):
 
     def test_screenshot_unwritable_path_falls_back_to_default(self):
         # An unwritable target must never fail the run — the image lands in the
-        # default folder and the result says so.
+        # default folder and the result says so. The default is the real Pictures
+        # known-folder (OneDrive-safe), so patch the resolver, not Path.home.
         import tempfile
         from pathlib import Path
         with tempfile.TemporaryDirectory() as td:
             blocker = Path(td) / "blocked"
             blocker.write_text("a file, so mkdir under it fails")
-            with patch("client.act.actor.Path.home", return_value=Path(td)):
+            with patch("client.act.actor._known_folder", return_value=Path(td)):
                 result = self.actor.execute({"type": "screenshot",
                                              "value": str(blocker / "sub" / "x.png")})
-            files = list((Path(td) / "Pictures" / "Screenshots").glob("orphic_screenshot_*.png"))
+            files = list((Path(td) / "Screenshots").glob("orphic_screenshot_*.png"))
             self.assertEqual(len(files), 1)
             self.assertIn("was not writable", result)
 
     def test_screenshot_default_path_is_pictures_screenshots(self):
-        # Patch home so the default path never touches the real user profile.
+        # No value -> default lands in the real Pictures\Screenshots. Patch the
+        # known-folder resolver so the test never touches the real profile.
         import tempfile
         from pathlib import Path
         with tempfile.TemporaryDirectory() as td:
-            with patch("client.act.actor.Path.home", return_value=Path(td)):
+            with patch("client.act.actor._known_folder", return_value=Path(td)) as kf:
                 result = self.actor.execute({"type": "screenshot", "value": None})
-            files = list((Path(td) / "Pictures" / "Screenshots").glob("orphic_screenshot_*.png"))
+            kf.assert_called_once_with("pictures")
+            files = list((Path(td) / "Screenshots").glob("orphic_screenshot_*.png"))
             self.assertEqual(len(files), 1)
             self.assertIn("Screenshots", result)
 

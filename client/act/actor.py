@@ -88,6 +88,40 @@ def _resolve_typed_path(text: str) -> str:
     return text
 
 
+# Single-instance document/browser apps: launching one again while it is ALREADY
+# open just focuses the user's existing document, so the next "type" lands in their
+# work (the "launch trap"). When the target is one of these AND a window of it is
+# already open, the client focuses it and opens a guaranteed-fresh surface instead —
+# a new browser TAB (ctrl+t) or a new document/tab (ctrl+n). This protection is
+# deterministic: it holds no matter what the brain planned. Keyword is matched as a
+# whole word against both the app name and the open window titles.
+_FRESH_SURFACE = {
+    "notepad": "ctrl+n",
+    "wordpad": "ctrl+n",
+    "word": "ctrl+n",
+    "excel": "ctrl+n",
+    "powerpoint": "ctrl+n",
+    "chrome": "ctrl+t",
+    "edge": "ctrl+t",
+    "firefox": "ctrl+t",
+    "brave": "ctrl+t",
+    "opera": "ctrl+t",
+}
+
+# The engine's launch/switch return a human string, not a status code. These
+# fragments mean it could NOT start/find the app — we must abort the whole plan
+# then, so the following type/press actions never fire into the wrong window
+# (e.g. a failed "launch Excel" must not type a formula into the Calculator).
+_ACTION_FAILED_MARKERS = ("not found", "no windows found", "could not", "failed")
+
+
+def _looks_failed(result: str) -> bool:
+    """True when a launch/switch result string reports the app could not be started
+    or found — the signal to abort the batch rather than act on the wrong window."""
+    low = result.lower()
+    return any(marker in low for marker in _ACTION_FAILED_MARKERS)
+
+
 class ActionError(RuntimeError):
     """An action could not be executed (unknown type, or no matching element)."""
 
@@ -188,9 +222,48 @@ class Actor:
         name = value or action.get("target_selector")
         if not name:
             raise ActionError("launch needs an app name in 'value'")
-        result = str(self._desktop.app(mode="launch", name=str(name)))
-        self._ensure_foreground(str(name))
+        name = str(name)
+        # LAUNCH TRAP: if this is a single-instance doc/browser app that is ALREADY
+        # open, launching it again just focuses the user's document and the next
+        # "type" clobbers their work. Focus it and open a fresh surface instead —
+        # a deterministic guarantee, independent of what the brain planned.
+        chord = self._fresh_surface_for(name)
+        if chord is not None:
+            self._desktop.app(mode="switch", name=name)
+            self._ensure_foreground(name)
+            self._desktop.shortcut(chord)
+            sleep(0.4)  # let the new tab/document become the active surface
+            surface = "tab" if chord == "ctrl+t" else "document"
+            return f"{name} already open — opened a fresh {surface}"
+        result = str(self._desktop.app(mode="launch", name=name))
+        if _looks_failed(result):
+            # Abort the plan: a launch that never started the app must not let the
+            # following actions run against whatever window currently has focus.
+            raise ActionError(f"could not launch {name}: {result}")
+        self._ensure_foreground(name)
         return result
+
+    def _fresh_surface_for(self, name: str) -> str | None:
+        """The 'new surface' chord (ctrl+t / ctrl+n) if `name` is a single-instance
+        doc/browser app that already has a window open; else None (launch normally)."""
+        low = name.lower()
+        keyword = next(
+            (k for k in _FRESH_SURFACE if re.search(rf"\b{re.escape(k)}\b", low)), None)
+        if keyword is None or not self._app_window_open(keyword):
+            return None
+        return _FRESH_SURFACE[keyword]
+
+    def _app_window_open(self, keyword: str) -> bool:
+        """True if any open window's title contains `keyword` as a whole word.
+        Uses the snapshot the brain just planned against (active window + all open
+        windows), so 'launch Excel' with a '... - Excel' window open is caught."""
+        state = getattr(self._desktop, "desktop_state", None)
+        if state is None:
+            return False
+        titles = [state.active_window.name if state.active_window else ""]
+        titles += [getattr(w, "name", "") or "" for w in (getattr(state, "windows", None) or [])]
+        pat = re.compile(rf"\b{re.escape(keyword)}\b", re.IGNORECASE)
+        return any(pat.search(t) for t in titles if t)
 
     def _ensure_foreground(self, app_name: str, timeout: float = 6.0) -> None:
         """The brain's contract says a launched app IS the foreground window, but the
@@ -220,7 +293,19 @@ class Actor:
         name = value or action.get("target_selector")
         if not name:
             raise ActionError("focus_window needs a window name")
-        return str(self._desktop.app(mode="switch", name=str(name)))
+        result = str(self._desktop.app(mode="switch", name=str(name)))
+        if _looks_failed(result):
+            # Abort the plan: if the target window was not found, the next chord or
+            # keystroke (a snap, a type) would hit the wrong window. Let the brain
+            # re-plan against the real screen instead.
+            raise ActionError(f"could not focus {name}: {result}")
+        # Settle the foreground before the plan's next action. focus_window is what
+        # precedes a snap chord (win+left/right) or a type, and those act on whatever
+        # window is CURRENTLY foreground — if focus has not finished switching, the
+        # chord snaps the wrong window. Polling until the target truly owns the
+        # foreground makes the following action reliable.
+        self._ensure_foreground(str(name))
+        return result
 
     def _do_click(self, action: dict, value) -> str:
         loc = self._require_loc(action)
@@ -298,19 +383,26 @@ class Actor:
         """
         png = self._desktop.get_screenshot(as_bytes=True)
         stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        default = Path.home() / "Pictures" / "Screenshots" / f"orphic_screenshot_{stamp}.png"
+
+        def _default_path() -> Path:
+            # Real Pictures folder (OneDrive redirects it away from the profile root),
+            # same known-folder resolution the brain's keyword paths use. Resolved
+            # lazily so an explicit save path never triggers an unused folder lookup.
+            return _known_folder("pictures") / "Screenshots" / f"orphic_screenshot_{stamp}.png"
+
         if value:
             path = _rebase_known_folder(str(value))
             if path.suffix.lower() != ".png":  # a folder was given -> name the file inside it
                 path = path / f"orphic_screenshot_{stamp}.png"
         else:
-            path = default
+            path = _default_path()
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(png)
         except OSError:
             # Never fail the run over an unwritable save path (the brain can only
             # guess paths) — fall back to our folder and say where it really went.
+            default = _default_path()
             default.parent.mkdir(parents=True, exist_ok=True)
             default.write_bytes(png)
             return (f"screenshot saved to {default} "
