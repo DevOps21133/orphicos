@@ -89,6 +89,21 @@ class Actor:
                 return i
         return None
 
+    def _scrollable_center(self, sel: str) -> tuple[int, int] | None:
+        """Resolve a scroll target against the snapshot's SCROLLABLE panes by name."""
+        state = self._desktop.desktop_state
+        tree = state.tree_state if state else None
+        low = sel.strip().lower()
+        if not low or tree is None:
+            return None
+        for node in (getattr(tree, "scrollable_nodes", None) or []):
+            name = (getattr(node, "name", "") or "").strip().lower()
+            if name and (low in name or name in low):
+                center = getattr(node, "center", None)
+                if center is not None:
+                    return int(center.x), int(center.y)
+        return None
+
     def _require_loc(self, action: dict) -> tuple[int, int]:
         loc = self._resolve_loc(action)
         if loc is None:
@@ -168,7 +183,13 @@ class Actor:
         return f"pressed {value}"
 
     def _do_scroll(self, action: dict, value) -> str:
-        loc = self._resolve_loc(action)  # optional; None scrolls the focused window
+        # A scroll target may name a SCROLLABLE pane (not an interactive element),
+        # and a stale/wrong name should never fail a scroll — the focused window
+        # is always a sane place to scroll. So resolution degrades, never raises.
+        try:
+            loc = self._resolve_loc(action)  # optional; None scrolls the focused window
+        except ActionError:
+            loc = self._scrollable_center(str(action.get("target_selector") or ""))
         direction = str(value).lower() if value else "down"
         if direction not in ("up", "down", "left", "right"):
             direction = "down"

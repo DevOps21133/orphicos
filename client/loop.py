@@ -23,7 +23,7 @@ _BATCH_SETTLE_SECONDS = 0.4  # let the UI update between actions WITHIN a batch
 # re-snapshot the desktop before the next batched action so name-based
 # target_selector resolution uses fresh elements/coordinates.
 _SCREEN_CHANGING = frozenset(
-    {"launch", "focus_window", "click", "double_click", "right_click", "press"})
+    {"launch", "focus_window", "click", "double_click", "right_click", "press", "scroll"})
 _DECIDE_RETRIES = 2     # a transient brain hiccup (502 / timeout) shouldn't abort a run
 _RETRY_BACKOFF = 1.5    # seconds to wait before retrying the same decide call
 _EMPTY_TOLERANCE = 2    # consecutive empty responses tolerated before we give up

@@ -9,21 +9,31 @@ client/tests/*. The real Actor/Perceiver/loop code under test is the genuine art
 from __future__ import annotations
 
 
+class FakeCenter:
+    def __init__(self, x: int = 50, y: int = 60) -> None:
+        self.x = x
+        self.y = y
+
+
 class FakeNode:
-    """Stands in for a windows-use TreeElementNode (only .name is read by the Actor)."""
+    """Stands in for a windows-use TreeElementNode/ScrollElementNode."""
 
     def __init__(self, name: str, control_type: str = "ButtonControl",
-                 window_name: str = "Test Window", metadata: dict | None = None) -> None:
+                 window_name: str = "Test Window", metadata: dict | None = None,
+                 center: FakeCenter | None = None) -> None:
         self.name = name
         self.control_type = control_type
         self.window_name = window_name
         self.metadata = metadata or {}
+        self.center = center or FakeCenter()
 
 
 class FakeTreeState:
-    def __init__(self, nodes: list[FakeNode], status: bool = True) -> None:
+    def __init__(self, nodes: list[FakeNode], status: bool = True,
+                 scrollable_nodes: list[FakeNode] | None = None) -> None:
         self.interactive_nodes = list(nodes)
         self.status = status
+        self.scrollable_nodes = list(scrollable_nodes or [])
 
 
 class FakeWindow:
@@ -46,9 +56,10 @@ class FakeDesktop:
 
     def __init__(self, node_names: list[str] | None = None, active_window: str | None = None,
                  tree_status: bool = True, screenshot: bytes = b"\x89PNG-fake",
-                 raise_on_coords: Exception | None = None) -> None:
+                 raise_on_coords: Exception | None = None,
+                 scrollable_nodes: list[FakeNode] | None = None) -> None:
         nodes = [FakeNode(n) for n in (node_names or [])]
-        self._tree = FakeTreeState(nodes, status=tree_status)
+        self._tree = FakeTreeState(nodes, status=tree_status, scrollable_nodes=scrollable_nodes)
         win = FakeWindow(active_window) if active_window else None
         self.desktop_state = FakeDesktopState(self._tree, win)
         self._screenshot = screenshot

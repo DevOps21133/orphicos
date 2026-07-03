@@ -23,6 +23,8 @@ from client._engine import Desktop
 # Payload guard: real app trees are usually < 300 interactive elements; anything
 # beyond this is browser/ribbon noise that only inflates tokens and latency.
 MAX_TREE_ELEMENTS = 300
+# A handful of scrollable panes is plenty of signal; more is nested-container noise.
+MAX_SCROLLABLE_ELEMENTS = 8
 
 
 @dataclass
@@ -94,6 +96,39 @@ def serialize_tree(active_window: str, nodes: list) -> str:
     return "\n".join(rows)
 
 
+def _scroll_pos(metadata: dict | None) -> str:
+    """Compact scroll position: `v=35%` (0%=top, 100%=bottom). UIA reports the
+    percent as 0-100, or -1 when the pane cannot actually scroll right now."""
+    v = (metadata or {}).get("vertical_scroll_percent")
+    if not isinstance(v, (int, float)) or v < 0:
+        return "v=?"
+    return f"v={min(max(v, 0), 100):.0f}%"
+
+
+def serialize_scrollables(nodes: list) -> str:
+    """The SCROLLABLE PANES section appended under the tree.
+
+    Off-screen elements are filtered out of the interactive tree entirely, so
+    without this section the brain cannot tell "the element does not exist" from
+    "the element is below the fold" — it would re-plan against the same viewport
+    forever instead of scrolling.
+    """
+    rows = []
+    for node in nodes[:MAX_SCROLLABLE_ELEMENTS]:
+        name = _clean(getattr(node, "name", "") or "")
+        ctype = _clean(getattr(node, "control_type", "") or "")
+        if ctype.endswith("Control"):
+            ctype = ctype[: -len("Control")]
+        if not name and not ctype:
+            continue
+        rows.append(f"{ctype}|{name}|{_scroll_pos(getattr(node, 'metadata', None))}")
+    if not rows:
+        return ""
+    return "\n".join(
+        ["SCROLLABLE PANES (more content off-screen; v=0% top, v=100% bottom):",
+         "# type|name|scrolled"] + rows)
+
+
 class Perceiver:
     def __init__(self, desktop: Desktop) -> None:
         self._desktop = desktop
@@ -105,6 +140,9 @@ class Perceiver:
         nodes = tree.interactive_nodes or []
         active = state.active_window.name if state.active_window else "(no active window)"
         ui_tree = serialize_tree(active, nodes)
+        scroll_block = serialize_scrollables(getattr(tree, "scrollable_nodes", None) or [])
+        if scroll_block:
+            ui_tree = f"{ui_tree}\n{scroll_block}"
         return Perception(ui_tree=ui_tree, is_empty=(not tree.status) or (not nodes))
 
     def capture_screenshot(self) -> str:

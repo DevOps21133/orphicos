@@ -233,6 +233,28 @@ class ControlFlowTests(unittest.TestCase):
         self.assertGreaterEqual(seen["n"], 2)
         self.assertIn(("click", (100, 200), "left", 1), desktop.calls)
 
+    def test_scroll_refreshes_snapshot_mid_batch(self):
+        # An element revealed BY the batch's scroll must resolve: scroll is a
+        # screen-changing action, so the loop re-snapshots before the next action.
+        desktop = FakeDesktop(node_names=["Address bar"], active_window="App")
+        real_get_state = desktop.get_state
+        seen = {"n": 0}
+
+        def refreshing_get_state():
+            seen["n"] += 1
+            if seen["n"] == 2:  # the intra-batch refresh (call 1 is the perceive)
+                desktop.set_nodes(["Accept"])
+            return real_get_state()
+
+        desktop.get_state = refreshing_get_state
+        brain = FakeBrain([_decision([
+            {"type": "scroll", "value": "down"},
+            {"type": "click", "target_selector": "Accept"},
+        ], done=True)])
+        outcome = self._run(desktop, brain)
+        self.assertEqual(outcome, "done")
+        self.assertIn(("click", (100, 200), "left", 1), desktop.calls)
+
     def _run_with_hooks(self, desktop, brain, should_stop=None, approve=None,
                         on_event=lambda e: None):
         return run_command("do a thing", desktop, brain, 5, on_event, should_stop, approve)

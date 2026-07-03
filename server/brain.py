@@ -73,6 +73,12 @@ Rules:
 - Set done=true TOGETHER WITH the final actions whenever this plan completes the command — the client executes
   the plan and reports success without another call to you (a failed action still triggers a re-plan, so this is
   safe). Reserve done=false for when you genuinely must see the resulting screen to plan the next step.
+- OFF-SCREEN CONTENT: the tree lists ONLY elements currently visible on screen. A SCROLLABLE PANES section under
+  the tree shows panes with more content and how far each is scrolled (v=0% top, v=100% bottom). When an element
+  the task needs SHOULD exist but is missing from the tree and a pane can still scroll, it is below the fold:
+  emit {"type":"scroll"} (put the pane's name in "target_selector" if one is listed) and END the plan with
+  done=false — the revealed elements arrive with the fresh tree on your next turn. Do not conclude an element
+  does not exist until the relevant pane is scrolled to the bottom.
 - If an action in your plan fails, the client aborts the rest of the plan and calls you again; STATE will contain
   "failed_action" describing which action failed and why. Re-plan from the fresh tree — do not blindly repeat it.
 - Keep "reasoning_summary" to one sentence and NEVER copy screen contents into it.

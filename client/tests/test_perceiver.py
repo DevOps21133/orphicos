@@ -8,7 +8,8 @@ from __future__ import annotations
 import unittest
 
 from client.perceive import Perceiver
-from client.perceive.perceiver import MAX_TREE_ELEMENTS, serialize_tree
+from client.perceive.perceiver import (MAX_SCROLLABLE_ELEMENTS, MAX_TREE_ELEMENTS,
+                                       serialize_scrollables, serialize_tree)
 from client.tests.fakes import FakeDesktop, FakeNode
 
 WIN = "Untitled - Notepad"
@@ -76,6 +77,32 @@ class SerializeTreeTest(unittest.TestCase):
         self.assertEqual(out.splitlines(), [f"ACTIVE WINDOW: {WIN}", "# id|type|name|meta"])
 
 
+class SerializeScrollablesTest(unittest.TestCase):
+    def test_scroll_position_and_format(self) -> None:
+        out = serialize_scrollables([
+            n("Document", "PaneControl", meta={"vertical_scroll_percent": 35.4}),
+            n("Settings list", "ListControl", meta={"vertical_scroll_percent": 0}),
+        ])
+        lines = out.splitlines()
+        self.assertIn("SCROLLABLE PANES", lines[0])
+        self.assertEqual(lines[2], "Pane|Document|v=35%")
+        self.assertEqual(lines[3], "List|Settings list|v=0%")
+
+    def test_unscrollable_percent_shown_as_unknown(self) -> None:
+        # UIA reports -1 when the pane cannot scroll right now.
+        out = serialize_scrollables([n("Doc", meta={"vertical_scroll_percent": -1})])
+        self.assertIn("Button|Doc|v=?", out)
+
+    def test_no_scrollables_yields_empty_string(self) -> None:
+        self.assertEqual(serialize_scrollables([]), "")
+
+    def test_capped_at_max(self) -> None:
+        nodes = [n(f"Pane{i}", "PaneControl") for i in range(MAX_SCROLLABLE_ELEMENTS + 5)]
+        out = serialize_scrollables(nodes)
+        rows = [r for r in out.splitlines() if r.startswith("Pane|")]
+        self.assertEqual(len(rows), MAX_SCROLLABLE_ELEMENTS)
+
+
 class PerceiverTest(unittest.TestCase):
     def test_perceive_uses_compact_serialization(self) -> None:
         desktop = FakeDesktop(node_names=["Save", "Cancel"], active_window="Test Window")
@@ -92,6 +119,20 @@ class PerceiverTest(unittest.TestCase):
         desktop = FakeDesktop(node_names=[], active_window="Game")
         p = Perceiver(desktop).perceive()
         self.assertTrue(p.is_empty)
+
+    def test_scrollable_section_appended_under_tree(self) -> None:
+        desktop = FakeDesktop(
+            node_names=["Save"], active_window="App",
+            scrollable_nodes=[n("Document", "PaneControl",
+                                meta={"vertical_scroll_percent": 50})])
+        p = Perceiver(desktop).perceive()
+        self.assertIn("0|Button|Save|", p.ui_tree)
+        self.assertIn("Pane|Document|v=50%", p.ui_tree)
+
+    def test_no_scrollable_section_when_none(self) -> None:
+        desktop = FakeDesktop(node_names=["Save"], active_window="App")
+        p = Perceiver(desktop).perceive()
+        self.assertNotIn("SCROLLABLE", p.ui_tree)
 
 
 if __name__ == "__main__":

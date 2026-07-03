@@ -230,6 +230,25 @@ class ScrollAndWaitTests(unittest.TestCase):
         self.actor.execute({"type": "scroll", "value": "sideways"})
         self.assertIn(("scroll", None, "vertical", "down", 3), self.desktop.calls)
 
+    def test_scroll_targets_scrollable_pane_by_name(self):
+        # "Document" is a SCROLLABLE pane, not an interactive element: the scroll
+        # must land at the pane's centre instead of failing resolution.
+        from client.tests.fakes import FakeCenter, FakeNode
+        desktop = FakeDesktop(
+            node_names=["Save"],
+            scrollable_nodes=[FakeNode("Document", "PaneControl",
+                                       center=FakeCenter(400, 300))])
+        Actor(desktop).execute({"type": "scroll", "target_selector": "Document",
+                                "value": "down"})
+        self.assertIn(("scroll", (400, 300), "vertical", "down", 3), desktop.calls)
+
+    def test_scroll_with_unknown_target_falls_back_to_focused_window(self):
+        # A bad scroll target must never fail the action — scrolling the focused
+        # window is always sane.
+        self.actor.execute({"type": "scroll", "target_selector": "Ghost pane",
+                            "value": "down"})
+        self.assertIn(("scroll", None, "vertical", "down", 3), self.desktop.calls)
+
     def test_wait_clamps_high(self):
         self.assertEqual(self.actor.execute({"type": "wait", "value": "20"}), "waited 10s")
 
