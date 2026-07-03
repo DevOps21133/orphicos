@@ -105,8 +105,10 @@ and licenses already vetted for the server below, all permissive:
 --------------------------------------------------------------------------------
 Big-brain LLM provider   (server — server/brain.py ONLY; Phase 1)
 --------------------------------------------------------------------------------
-Provider:   NVIDIA API Catalog (OpenAI-compatible gateway, integrate.api.nvidia.com)
-Model:      deepseek-ai/deepseek-v4-pro
+Provider:   Z.ai (Zhipu AI) — OpenAI-compatible API, api.z.ai
+Model:      glm-5.2 (thinking disabled for latency)
+Fallback:   NVIDIA API Catalog (integrate.api.nvidia.com, deepseek-ai models) —
+            previous provider, kept as a commented emergency fallback in server/.env.
 SDK:        openai (Python) — Apache-2.0  (the client library we call it through)
 Source:     https://github.com/openai/openai-python
 Note:       The provider/model name is an internal detail (Rule 2). It appears

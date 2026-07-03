@@ -4,9 +4,11 @@ This is the ONLY module in the codebase that names or talks to the big-brain LLM
 provider (CLAUDE.md Rule 2). Everything else depends on the provider-neutral
 interface `decide(...)`. To swap providers, change only this file.
 
-Provider: NVIDIA's OpenAI-compatible API gateway (integrate.api.nvidia.com),
-model `deepseek-ai/deepseek-v4-pro`. Credentials come from the server environment
-(server/.env): LLM_API_KEY, LLM_MODEL, LLM_BASE_URL. No key or provider name ever
+Provider: Z.ai's OpenAI-compatible API (api.z.ai), model `glm-5.2` with the
+thinking phase disabled for latency (LLM_EXTRA_BODY). Previous provider — NVIDIA's
+free gateway (integrate.api.nvidia.com, deepseek models) — is kept as a commented
+fallback in server/.env. Credentials come from the server environment (server/.env):
+LLM_API_KEY, LLM_MODEL, LLM_BASE_URL, LLM_EXTRA_BODY. No key or provider name ever
 lives outside this file, THIRD-PARTY-NOTICES.txt, and the gitignored server/.env.
 
 Zero-retention (Rule 4): screen data (ui_tree, screenshot) passed in here is used
