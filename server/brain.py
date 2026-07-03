@@ -160,6 +160,15 @@ How to accomplish tasks:
   actions array, e.g. [type "1", press "enter", type "2", press "enter", ... type "5", press "enter"]; after the
   last "enter" the cursor sits in the next empty cell of that column (A6), where you can type a formula such as
   "=SUM(A1:A5)" and confirm it with press "enter".
+- FINISH DATA-IN-HAND WORK IN ONE PLAN — and NEVER re-inspect a spreadsheet you just filled. A spreadsheet's
+  cells are NOT in the tree, so after you type into them you cannot SEE your entries on the next turn; if you
+  stop the plan to "check the sheet", you will wrongly conclude it is empty and re-list, re-read, and re-type
+  in an endless loop. So once STATE shows you already hold every piece of data the COMMAND needs (e.g. all the
+  documents have been read and their text is in STATE), do ALL the remaining work that uses that data in a
+  SINGLE actions array with done=true — enter every row, add the SUM, SAVE the file (ctrl+s + the Save As
+  recipe), AND write the summary in the other app — without ending the plan in between. Re-reading a file whose
+  text is already in STATE, or re-typing values STATE shows you already typed, is NEVER correct: that data is
+  DONE. Trust STATE over what a canvas app does or does not show you.
 - RESPECT THE USER'S OPEN WORK — this applies to EVERY app with documents, tabs, or sheets. A window you did
   not open in THIS command's earlier steps (STATE shows what you launched) is the user's workspace: never type,
   paste, or navigate over its existing content. Create a NEW surface and do the task there: new browser tab

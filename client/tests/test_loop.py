@@ -5,10 +5,13 @@ patched to a no-op so the inter-step settle doesn't slow the suite.
 """
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
-from client.loop import _DECIDE_RETRIES, _EMPTY_TOLERANCE, run_command
+from client.loop import (_DECIDE_RETRIES, _EMPTY_TOLERANCE, _STUCK_REGATHER_LIMIT,
+                         run_command)
 from client.net import BrainError
 from client.tests.fakes import FakeBrain, FakeDesktop
 
@@ -298,6 +301,35 @@ class ControlFlowTests(unittest.TestCase):
         outcome = self._run(desktop, brain)
         self.assertEqual(outcome, "done")
         self.assertIn(("click", (100, 200), "left", 1), desktop.calls)
+
+    def test_regathering_already_read_data_stops_the_run(self):
+        # The horror case: the brain loses its progress (a filled spreadsheet is a
+        # canvas it can't see in the tree) and restarts the task, re-listing/re-reading
+        # forever. The loop guard must stop it as "stuck" instead of looping to the
+        # step limit and re-typing over the sheet.
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "a.pdf").write_text("x", encoding="utf-8")
+            desktop = FakeDesktop(node_names=[], active_window="Calc")
+            brain = FakeBrain([_decision([{"type": "list_dir", "value": td}], done=False)])
+            events = []
+            outcome = self._run(desktop, brain, max_steps=8, on_event=events.append)
+        self.assertEqual(outcome, "stuck")               # stopped, not looped to max_steps
+        # One free gather (step 1) + _STUCK_REGATHER_LIMIT redundant re-gathers, then stop.
+        self.assertEqual(len(brain.seen), _STUCK_REGATHER_LIMIT + 1)
+        self.assertEqual(events[-1]["actions"], [])
+        self.assertIn("repeating", events[-1]["reasoning"].lower())
+
+    def test_distinct_gathers_do_not_trip_the_guard(self):
+        # Reading DIFFERENT files/folders is normal progress and must never be mistaken
+        # for a loop, no matter how many — only RE-reading already-gathered data counts.
+        with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
+            desktop = FakeDesktop(node_names=[], active_window="App")
+            brain = FakeBrain([
+                _decision([{"type": "list_dir", "value": a}], done=False),
+                _decision([{"type": "list_dir", "value": b}], done=True),
+            ])
+            outcome = self._run(desktop, brain, max_steps=8)
+        self.assertEqual(outcome, "done")
 
     def _run_with_hooks(self, desktop, brain, should_stop=None, approve=None,
                         on_event=lambda e: None):

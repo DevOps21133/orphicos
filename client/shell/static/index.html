@@ -396,6 +396,7 @@
     if (outcome === "done") return "✓ Done.";
     if (outcome === "stopped") return "■ Stopped.";
     if (outcome === "max_steps") return "Reached the step limit before finishing.";
+    if (outcome === "stuck") return "Stopped: the engine was repeating itself without making progress.";
     if (outcome === "no_actions") return "The engine had nothing to do here.";
     if (outcome === "brain_error") return "The OrphicOS engine couldn't be reached. Try again.";
     return "Finished: " + outcome;

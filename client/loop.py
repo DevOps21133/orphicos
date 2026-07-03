@@ -39,6 +39,16 @@ _RESULT_CAP = 80
 _CONTENT_ACTIONS = frozenset({"read_document", "list_dir"})
 _CONTENT_RESULT_CAP = 6000
 
+# Re-reading a document or re-listing a folder already gathered this run is the
+# signature of a stuck brain: it lost track of its progress (typically because a
+# canvas app like a spreadsheet is absent from the tree, so it cannot SEE the work it
+# already did) and restarted the task from scratch. Reads are idempotent, so a couple
+# of redundant ones are harmless — but past this budget the run is looping, and we stop
+# it rather than let it re-type over a half-filled sheet forever (exactly the runaway
+# the kill switch exists for). Enforced in the client, not trusted to the brain prompt.
+_GATHER_ACTIONS = frozenset({"read_document", "list_dir"})
+_STUCK_REGATHER_LIMIT = 3
+
 
 def _clip_result(result, atype: str | None) -> str:
     cap = _CONTENT_RESULT_CAP if atype in _CONTENT_ACTIONS else _RESULT_CAP
@@ -73,6 +83,8 @@ def run_command(
     history: list[dict] = []
     consecutive_empty = 0
     last_failure: dict | None = None  # a mid-batch ActionError, reported to the brain once
+    gathered: set[tuple] = set()  # (type, value) of reads/lists already done this run
+    redundant_gathers = 0  # how many times the brain re-gathered already-known data
     force_screenshot = False  # the brain's previous decision set need_screenshot
     steps_used = 0
     step = 0  # monotonic step label for events/history (waived steps still count up)
@@ -111,6 +123,20 @@ def run_command(
         actions = decision.get("actions") or []
         summary = decision.get("reasoning_summary", "")
         force_screenshot = bool(decision.get("need_screenshot"))
+
+        # Loop guard: if the plan re-reads/re-lists targets already gathered this run,
+        # the brain has lost its progress and is restarting the task. Idempotent reads
+        # make a few harmless, but past the budget the run is looping — stop it here,
+        # before it re-types over work already done, instead of burning the step budget.
+        redundant_gathers += sum(
+            1 for a in actions
+            if a.get("type") in _GATHER_ACTIONS and (a.get("type"), a.get("value")) in gathered)
+        if redundant_gathers >= _STUCK_REGATHER_LIMIT:
+            on_event({"step": step, "reasoning": "Stopped: the engine was repeating steps it "
+                      "had already completed without making progress.",
+                      "used_vision": screenshot is not None, "actions": [], "done": False,
+                      "timings": {"perceive_ms": perceive_ms}})
+            return "stuck"
 
         # Per-step latency breakdown (metadata only — never screen data, Rule 4):
         # perceive = UIA read+serialize here; decide = full round trip; brain/server
@@ -170,6 +196,8 @@ def run_command(
                     {"type": a.get("type"), "target": a.get("target_selector"),
                      "value": a.get("value"), "result": outcome}
                 )
+                if a.get("type") in _GATHER_ACTIONS:  # remember what we've read/listed
+                    gathered.add((a.get("type"), a.get("value")))
                 # Cheap re-snapshot after screen-changing actions so the next batched
                 # action resolves names against fresh elements (ids/coords go stale).
                 if a.get("type") in _SCREEN_CHANGING and i < len(actions) - 1:
