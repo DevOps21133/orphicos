@@ -187,8 +187,41 @@ note), none of these ship to users.
       Source: https://jrsoftware.org/isinfo.php
 
 --------------------------------------------------------------------------------
-Local STT model / tooling   (client — speech-to-text; Phase 3)      [PLACEHOLDER]
+Local STT model / tooling   (client — speech-to-text; Phase 3)
 --------------------------------------------------------------------------------
-Project:    <faster-whisper or Parakeet, plus sounddevice — recorded in Phase 3>
-Source:     <repository>
-License:    <verify before adding — must be MIT / Apache-2.0 / BSD>
+Installed 2026-07-03 into the client venv (licenses verified via package metadata
+and upstream repositories). STT runs entirely on the user's machine; these ship
+with the client in Phase 6 and must survive packaging/verify_dist.py review.
+
+  faster-whisper   1.2.1    MIT           https://github.com/SYSTRAN/faster-whisper
+      Whisper reimplementation on CTranslate2; the client/voice/stt.py engine.
+  ctranslate2      4.8.0    MIT           https://github.com/OpenNMT/CTranslate2
+      Inference runtime used by faster-whisper.
+  sounddevice      0.5.5    MIT           https://github.com/spatialaudio/python-sounddevice
+      Microphone capture (client/voice/recorder.py). Its Windows wheel bundles
+      PortAudio (MIT license).
+  av (PyAV)        13.1.0   BSD-3-Clause  https://github.com/PyAV-Org/PyAV
+      Hard dependency of faster-whisper (audio file decoding; the OrphicOS client
+      feeds raw PCM and never decodes files through it, but the import is
+      unconditional). FLAG: PyAV's binary wheels bundle FFmpeg libraries, which
+      are LGPL-2.1+ (weak copyleft, dynamically linked, unmodified). Same posture
+      as the other flagged weak-copyleft transitives: acceptable unmodified and
+      dynamically linked; revisit at Phase 6 packaging review. Pinned <14 because
+      newer av wheels are blocked by Windows Smart App Control on locked-down
+      machines (unsigned/low-reputation DLLs).
+  onnxruntime      1.27.0   MIT           https://github.com/microsoft/onnxruntime
+      Transitive via faster-whisper (Silero VAD path; unused — vad_filter=False —
+      but imported by the package).
+  flatbuffers      25.12.19 Apache-2.0    (transitive via onnxruntime)
+  numpy            2.4.6    BSD-3-Clause (+ permissive 0BSD/MIT/Zlib/CC0 parts)
+      Audio buffers; was already in the client tree via windows-use.
+  huggingface_hub  1.21.0   Apache-2.0    (model download on first use)
+  tokenizers       0.23.1   Apache-2.0    (transitive via faster-whisper)
+  cffi             2.0.0    MIT           (transitive via sounddevice)
+
+STT model weights: Whisper "base" (Systran/faster-whisper-base), MIT license
+(OpenAI Whisper weights, converted by SYSTRAN). Downloaded on first use to
+%LOCALAPPDATA%\OrphicOS\stt-models — never bundled in the repo.
+
+The push-to-talk hotkey (client/voice/ptt.py) uses the Win32 API directly via
+ctypes (Python stdlib) — no third-party hotkey library was added.
