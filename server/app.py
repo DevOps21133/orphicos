@@ -10,6 +10,7 @@ Run locally:
 from __future__ import annotations
 
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -21,7 +22,7 @@ from pydantic import BaseModel, Field
 # Load server-only secrets (LLM_API_KEY etc.) from server/.env before serving.
 load_dotenv(Path(__file__).with_name(".env"))
 
-from server import accounts, auth, brain  # noqa: E402 - must follow load_dotenv
+from server import accounts, auth, brain, entitlements, skills  # noqa: E402 - must follow load_dotenv
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 # Keep the provider host and any request bodies OUT of our logs (Rules 2 & 4):
@@ -87,6 +88,11 @@ class CommandResponse(BaseModel):
     # The brain could not decide from the tree alone: the client should include a
     # screenshot with its NEXT request (Rule 5's brain-requested vision path).
     need_screenshot: bool = False
+    # Which paid skill this decision used (informational), and — when set — the
+    # skill the user has NOT unlocked: the actions then open its store checkout
+    # instead of doing the task, and the shell shows the upsell distinctly.
+    skill: Optional[str] = None
+    locked_skill: Optional[str] = None
     reasoning_summary: str
     # Latency metadata for the client's per-step breakdown (numbers only — never
     # screen data, Rule 4): llm_ms = provider call, server_ms = total server time.
@@ -141,14 +147,41 @@ async def health() -> dict[str, str]:
     return {"status": "ok", "service": "OrphicOS engine"}
 
 
+def _upsell(skill_id: str) -> dict:
+    """The smiling-doorman response for a locked skill: no scolding, no silent
+    failure — a warm line plus one action that opens that skill's checkout page
+    in the user's browser, at the moment they most want the result."""
+    pack = skills.get(skill_id)
+    store_base = os.environ.get("ORPHIC_STORE_BASE", "https://orphicos.app").rstrip("/")
+    return {
+        "actions": [{"type": "open_path", "target_selector": None, "coords": None,
+                     "value": store_base + pack["checkout_path"]}],
+        "done": True,
+        "need_screenshot": False,
+        "skill": skill_id,
+        "locked_skill": skill_id,
+        "reasoning_summary": (f"I can do that the moment your {pack['title']} skill is on — "
+                              "I've opened it in the store; one click and I'll take it from there."),
+    }
+
+
 @app.post("/command", response_model=CommandResponse)
 def command(req: CommandRequest, user_id: str = Depends(current_user)) -> CommandResponse:
     # Deliberately sync: FastAPI runs sync endpoints on the threadpool, so the
     # blocking LLM call cannot freeze the event loop. (As `async def` it did —
     # one slow/hung provider call stalled /health and every other user's step.)
     t0 = time.monotonic()
+    unlocked = entitlements.unlocked(user_id)
     try:
-        decision, usage = brain.decide(req.command, req.ui_tree, req.state, req.screenshot)
+        decision, usage = brain.decide(req.command, req.ui_tree, req.state, req.screenshot,
+                                       unlocked_skills=unlocked)
+        # THE GATE (server-side, per request): a decision tagged with a skill the
+        # user has not bought never executes — it becomes the checkout upsell.
+        if decision.get("skill") and decision["skill"] not in unlocked:
+            # Demand signal for pricing/branch order: skill id only, never the
+            # command text (Rule 4 spirit — commands can contain screen content).
+            log.info("locked_skill user=%s skill=%s", user_id, decision["skill"])
+            decision = _upsell(decision["skill"])
         server_ms = int((time.monotonic() - t0) * 1000)
         timings = {"server_ms": server_ms}
         if isinstance(usage.get("latency_ms"), int):
@@ -163,10 +196,11 @@ def command(req: CommandRequest, user_id: str = Depends(current_user)) -> Comman
     # screenshot, or command text (Rule 4).
     calls = auth.record_call(user_id)
     log.info(
-        "cmd user=%s actions=%d types=%s done=%s vision=%s asked_vision=%s latency_ms=%s tokens=%s calls=%d",
+        "cmd user=%s actions=%d types=%s done=%s vision=%s asked_vision=%s skill=%s latency_ms=%s tokens=%s calls=%d",
         user_id, len(response.actions),
         ",".join(a.type for a in response.actions) or "-",
         response.done, bool(req.screenshot), response.need_screenshot,
+        response.skill or "-",
         usage.get("latency_ms"), usage.get("total_tokens"), calls,
     )
     return response

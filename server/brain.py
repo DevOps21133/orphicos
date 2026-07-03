@@ -23,6 +23,8 @@ from typing import Any
 
 from openai import BadRequestError, OpenAI
 
+from server import skills
+
 # Action verbs the thin client (Windows-Use, Phase 2) knows how to execute.
 ALLOWED_ACTIONS = (
     "launch", "click", "double_click", "right_click",
@@ -44,6 +46,8 @@ Return ONLY a JSON object (no prose, no markdown) with this exact shape:
            "actions" array means it is already satisfied), else false>,
   "need_screenshot": <true ONLY when you cannot plan from this tree and must SEE the screen — your next
                       call will then include a screenshot; otherwise false>,
+  "skill": <the id of the PAID SKILLS catalog entry this COMMAND requires, else null — see the PAID SKILLS
+            section at the end>,
   "reasoning_summary": "<one short sentence; never echo screen contents>"
 }
 
@@ -142,14 +146,6 @@ How to accomplish tasks:
   when the task then wants a capture, append the screenshot to the SAME plan, e.g. [launch "browser", press
   "ctrl+l", type "Mercedes car", press "enter", wait "2", screenshot] with done=true. Never click a search box
   by name (page elements are often missing from the tree) — the address bar via "ctrl+l" always works.
-- To write an email in Gmail: navigate the browser to "gmail.com" (address-bar chain above) and wait "2"; on
-  the Gmail screen click "Compose", wait "1", then STOP that plan (done=false) — the compose pane is a new
-  screen you must see before filling it. On the next turn the pane's To field already has keyboard focus: type
-  the recipient (the address, or a person's name to use Gmail's contact suggestions), press "enter" to accept
-  the top suggestion, press "tab" to reach Subject, type the subject, press "tab" to reach the message body,
-  type the message — ALL in ONE plan. Write a clear subject and body yourself from the COMMAND's intent unless
-  exact text is dictated. Finish that same plan by clicking the "Send" button with done=true; the client asks
-  the user to approve the send, so the plan is safe to complete in one go.
 - For file/folder operations, launch "File Explorer" first, then navigate to the target folder BEFORE creating
   anything. Navigate with the ADDRESS BAR — never by clicking a "Desktop" entry in the navigation pane, a breadcrumb,
   or a tab: several elements can share that name, a click may hit the wrong one or not change the view at all, and
@@ -185,6 +181,42 @@ How to accomplish tasks:
 - Prefer press (keyboard shortcuts) and named tree elements over clicking tiny toolbar/ribbon icons.
 """
 
+
+def _system_prompt(unlocked: frozenset[str]) -> str:
+    """Base prompt + the PAID SKILLS section for this user's entitlements.
+
+    Unlocked packs contribute their full expertise rules; locked packs appear
+    ONLY as id + a classify line, so the brain can tag a command as needing them
+    without ever holding the recipes — the paywall is enforced by what the
+    prompt contains, not by trusting the model.
+    """
+    catalog = []
+    expertise = []
+    for pack in skills.ALL.values():
+        state = "UNLOCKED" if pack["id"] in unlocked else "LOCKED"
+        catalog.append(f'- {pack["id"]} [{state}]: {pack["classify"]}')
+        if pack["id"] in unlocked:
+            expertise.append(f'{pack["title"]} skill expertise:\n{pack["expertise"]}')
+    section = [
+        "\nPAID SKILLS:",
+        "Some in-app expertise is a paid OrphicOS skill. Catalog:",
+        *catalog,
+        'Tag EVERY response: set "skill" to the one catalog id whose EXPERTISE the COMMAND needs, else null.',
+        "The tag is about the WORK asked for, never the apps mentioned: skill MUST be null when the COMMAND",
+        "only opens, launches, closes, switches to, or navigates to an app or website — even the skill's own",
+        'app. Examples: "open Gmail" -> null; "write an email to Alex and send it" -> "gmail"; "open Excel and',
+        'put 1 to 5 in column A" -> null (plain typing); "build a chart from A1:B10" -> "excel". When in doubt,',
+        "use null and do the work with your general rules.",
+        'For a skill marked LOCKED, do NOT plan the task at all: return exactly "skill": "<id>" with',
+        '"actions": [] and done=true, plus a neutral one-sentence reasoning_summary — the server handles what',
+        "the user sees. Never attempt a locked skill's task with your general rules, and never mention prices",
+        "or purchasing yourself.",
+    ]
+    if expertise:
+        section.append("\n" + "\n\n".join(expertise))
+    return _SYSTEM_PROMPT + "\n".join(section) + "\n"
+
+
 _client: OpenAI | None = None
 _client_sig: Any = None
 
@@ -207,7 +239,8 @@ def _as_data_uri(screenshot: str) -> str:
     return screenshot if screenshot.startswith("data:") else f"data:image/png;base64,{screenshot}"
 
 
-def _build_messages(command: str, ui_tree: str, state: dict | None, screenshot: str | None) -> list[dict]:
+def _build_messages(command: str, ui_tree: str, state: dict | None, screenshot: str | None,
+                    unlocked: frozenset[str] = frozenset()) -> list[dict]:
     parts = [
         f"COMMAND:\n{command}\n",
         f"UI TREE:\n{ui_tree if ui_tree else '(empty — tree unavailable for this app)'}\n",
@@ -235,7 +268,7 @@ def _build_messages(command: str, ui_tree: str, state: dict | None, screenshot: 
     else:
         content = text_block
     return [
-        {"role": "system", "content": _SYSTEM_PROMPT},
+        {"role": "system", "content": _system_prompt(unlocked)},
         {"role": "user", "content": content},
     ]
 
@@ -334,25 +367,33 @@ def _parse_decision(raw: str, allow_coords: bool) -> dict:
             "coords": _coerce_coords(a.get("coords")) if allow_coords else None,
             "value": _coerce_str(a.get("value")),
         })
+    skill = data.get("skill")
     return {
         "actions": actions,
         "done": bool(data.get("done", False)),
         "need_screenshot": bool(data.get("need_screenshot", False)),
+        # Only catalog ids pass through — a hallucinated skill name must never gate.
+        "skill": skill if isinstance(skill, str) and skill in skills.ALL else None,
         "reasoning_summary": str(data.get("reasoning_summary", ""))[:500],
     }
 
 
 def decide(command: str, ui_tree: str, state: dict | None = None,
-           screenshot: str | None = None) -> tuple[dict, dict]:
+           screenshot: str | None = None,
+           unlocked_skills: frozenset[str] = frozenset()) -> tuple[dict, dict]:
     """Provider-neutral decision entry point.
 
+    unlocked_skills selects which paid expertise packs enter the prompt (locked
+    packs are only listed for tagging — see _system_prompt).
+
     Returns (decision, usage):
-      decision = {"actions": [...], "done": bool, "need_screenshot": bool, "reasoning_summary": str}
+      decision = {"actions": [...], "done": bool, "need_screenshot": bool,
+                  "skill": str | None, "reasoning_summary": str}
       usage    = {"prompt_tokens", "completion_tokens", "total_tokens", "latency_ms"}
     """
     client = _get_client()
     model = os.environ.get("LLM_MODEL", "deepseek-ai/deepseek-v4-pro")
-    messages = _build_messages(command, ui_tree, state, screenshot)
+    messages = _build_messages(command, ui_tree, state, screenshot, unlocked_skills)
 
     t0 = time.monotonic()
     completion = _create_completion(client, model, messages)
