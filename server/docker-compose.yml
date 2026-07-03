@@ -1,12 +1,12 @@
-# OrphicOS brain — production stack: the brain app + Caddy (automatic Let's Encrypt TLS).
+# OrphicOS brain â€” production stack: the brain app + Caddy (automatic Let's Encrypt TLS).
 #
 # On the VPS:
 #   1) copy server/ to the host (never client/)
-#   2) create server/.env  (LLM_API_KEY, LLM_MODEL, LLM_BASE_URL — chmod 600)
-#   3) DOMAIN=brain.orphicos.ai docker compose up -d --build
+#   2) create server/.env  (LLM_API_KEY, LLM_MODEL, LLM_BASE_URL â€” chmod 600)
+#   3) DOMAIN=brain.orphicos.app docker compose up -d --build
 #   4) issue a token:  docker compose exec brain python -m server.auth issue <user_id>
 #
-# Zero-retention (Rule 4): neither service logs request bodies — the brain never logs
+# Zero-retention (Rule 4): neither service logs request bodies â€” the brain never logs
 # screen data by design, and Caddy's default access log is off (no `log` directive).
 
 services:
@@ -26,7 +26,7 @@ services:
       - "80:80"                       # ACME http challenge + redirect to https
       - "443:443"
     environment:
-      DOMAIN: ${DOMAIN:?set DOMAIN, e.g. DOMAIN=brain.orphicos.ai docker compose up}
+      DOMAIN: ${DOMAIN:?set DOMAIN, e.g. DOMAIN=brain.orphicos.app docker compose up}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data              # certificates persist across restarts

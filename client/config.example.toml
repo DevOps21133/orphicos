@@ -1,10 +1,10 @@
 # OrphicOS client configuration (example).
 # Copy to client/config.toml and set SERVER_BASE.
 #
-# The client is a THIN app: it has NO brain and NO LLM API key — ever
+# The client is a THIN app: it has NO brain and NO LLM API key â€” ever
 # (Rules 1 & 6). The only address it talks to is the OrphicOS brain below.
 
-SERVER_BASE = "https://brain.orphicos.ai"
+SERVER_BASE = "https://brain.orphicos.app"
 
 # The per-user OrphicOS token is issued at sign-in (Phase 6) and injected at
 # runtime via the ORPHIC_TOKEN environment variable. It is NOT stored in this
@@ -17,6 +17,6 @@ SERVER_BASE = "https://brain.orphicos.ai"
 # REQUEST_TIMEOUT = 30.0   # seconds to wait for each brain decision
 # MAX_STEPS = 12           # max perceive->decide->act cycles per command
 
-# Optional OrphicOS shell UI (Phase 5) — the local dark UI, bound to localhost only:
+# Optional OrphicOS shell UI (Phase 5) â€” the local dark UI, bound to localhost only:
 # SHELL_HOST = "127.0.0.1"
 # SHELL_PORT = 8700        # kept off 8000 (the brain's local dev port)
