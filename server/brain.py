@@ -105,6 +105,12 @@ How to accomplish tasks:
   actions array, e.g. [type "1", press "enter", type "2", press "enter", ... type "5", press "enter"]; after the
   last "enter" the cursor sits in the next empty cell of that column (A6), where you can type a formula such as
   "=SUM(A1:A5)" and confirm it with press "enter".
+- To search the web or open a website, drive the BROWSER through its address bar (it doubles as a search box):
+  launch the browser (or focus_window if a taskbar row shows one running), press "ctrl+l" to focus the address
+  bar, type the query or URL, press "enter", then wait "2" for the page to render. Chain this in ONE plan, and
+  when the task then wants a capture, append the screenshot to the SAME plan, e.g. [launch "browser", press
+  "ctrl+l", type "Mercedes car", press "enter", wait "2", screenshot] with done=true. Never click a search box
+  by name (page elements are often missing from the tree) — the address bar via "ctrl+l" always works.
 - For file/folder operations, launch "File Explorer" first, then navigate to the target folder BEFORE creating
   anything. Navigate with the ADDRESS BAR — never by clicking a "Desktop" entry in the navigation pane, a breadcrumb,
   or a tab: several elements can share that name, a click may hit the wrong one or not change the view at all, and
