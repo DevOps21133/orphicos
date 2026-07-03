@@ -62,7 +62,11 @@ class Hub:
 
 
 def create_app(submit: SubmitFn, health_check: Callable[[], bool],
-               server_base: str = "", allowed_origins: Optional[set[str]] = None) -> FastAPI:
+               server_base: str = "", allowed_origins: Optional[set[str]] = None,
+               voice: Optional[object] = None) -> FastAPI:
+    # `voice` is the Phase 3 VoiceController (duck-typed: .toggle() and .HOTKEY), or None
+    # when voice isn't wired (tests). Its transcripts arrive as hub events and only FILL
+    # the command bar in the browser — submission stays a human keypress (confirm gate).
     # allowed_origins guards /ws against Cross-Site WebSocket Hijacking: a page on any other
     # origin could otherwise open ws://127.0.0.1:<port>/ws and drive the desktop, since
     # browsers apply no Same-Origin Policy to the WS handshake. Browsers ALWAYS send an
@@ -102,7 +106,9 @@ def create_app(submit: SubmitFn, health_check: Callable[[], bool],
         return JSONResponse({"connected": bool(connected),
                              "server_base": server_base,
                              "running": hub.active is not None,
-                             "kill_hotkey": app.state.kill_label})
+                             "kill_hotkey": app.state.kill_label,
+                             "voice": voice is not None,
+                             "voice_hotkey": getattr(voice, "HOTKEY", None)})
 
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket) -> None:
@@ -117,7 +123,7 @@ def create_app(submit: SubmitFn, health_check: Callable[[], bool],
         try:
             while True:
                 msg = await ws.receive_json()
-                await _handle(msg, hub, submit, ws)
+                await _handle(msg, hub, submit, ws, voice)
         except WebSocketDisconnect:
             pass
         finally:
@@ -126,8 +132,18 @@ def create_app(submit: SubmitFn, health_check: Callable[[], bool],
     return app
 
 
-async def _handle(msg: dict, hub: Hub, submit: SubmitFn, ws: WebSocket) -> None:
+async def _handle(msg: dict, hub: Hub, submit: SubmitFn, ws: WebSocket,
+                  voice: Optional[object] = None) -> None:
     kind = msg.get("type")
+
+    if kind == "mic":
+        # The mic button toggles recording; the resulting transcript comes back as a
+        # broadcast hub event and only fills the bar (confirm gate — never a run).
+        if voice is None:
+            await ws.send_json({"type": "error", "message": "Voice input isn't available."})
+        else:
+            await asyncio.to_thread(voice.toggle)
+        return
 
     if kind == "run":
         command = (msg.get("command") or "").strip()
