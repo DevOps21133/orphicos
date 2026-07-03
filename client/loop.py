@@ -31,6 +31,20 @@ _EMPTY_TOLERANCE = 2    # consecutive empty responses tolerated before we give u
 _PURE_WAIT = frozenset({"wait", "wait_for"})  # steps that only pass time
 _WAIT_WAIVERS = 3       # pure-wait steps that don't consume the max_steps budget
 
+# Most action results are short status strings ("opened X", "clicked (x,y)") kept
+# tiny so STATE stays small. read_document/list_dir instead return CONTENT the brain
+# must read in full (a PDF's text, a folder listing) — they get a far larger cap.
+# The document reader already bounds its own text, so this is just a backstop.
+_RESULT_CAP = 80
+_CONTENT_ACTIONS = frozenset({"read_document", "list_dir"})
+_CONTENT_RESULT_CAP = 6000
+
+
+def _clip_result(result, atype: str | None) -> str:
+    cap = _CONTENT_RESULT_CAP if atype in _CONTENT_ACTIONS else _RESULT_CAP
+    text = str(result)
+    return text if len(text) <= cap else text[:cap] + "…"
+
 
 def run_command(
     command: str,
@@ -180,7 +194,7 @@ def run_command(
             "actions": [
                 {"type": r["type"], "target": r["target"],
                  "value": None if r["value"] is None else str(r["value"])[:120],
-                 "result": str(r["result"])[:80]}
+                 "result": _clip_result(r["result"], r["type"])}
                 for r in results
             ],
         })

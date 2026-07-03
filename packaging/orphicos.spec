@@ -44,7 +44,9 @@ a = Analysis(
     ["entry.py"],
     pathex=[".."],
     datas=[("../client/shell/static", "client/shell/static")],
-    hiddenimports=[],
+    # pypdf is imported lazily inside client/perceive/documents.py (read_document);
+    # pin it here so the frozen client always bundles it.
+    hiddenimports=["pypdf"],
     excludes=_WALL_EXCLUDES,
     noarchive=False,
 )

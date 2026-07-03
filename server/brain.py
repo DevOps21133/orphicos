@@ -29,7 +29,7 @@ from server import skills
 ALLOWED_ACTIONS = (
     "launch", "click", "double_click", "right_click",
     "type", "press", "scroll", "focus_window", "wait", "wait_for",
-    "set_clipboard", "open_path", "screenshot",
+    "set_clipboard", "open_path", "screenshot", "read_document", "list_dir",
 )
 
 _SYSTEM_PROMPT = """You are the OrphicOS engine: the decision cortex that drives a Windows 11 desktop.
@@ -53,7 +53,7 @@ Return ONLY a JSON object (no prose, no markdown) with this exact shape:
 
 Rules:
 - Allowed "type" verbs: launch, click, double_click, right_click, type, press, scroll, focus_window, wait,
-  wait_for, set_clipboard, open_path, screenshot.
+  wait_for, set_clipboard, open_path, screenshot, read_document, list_dir.
 - PREFER acting on named tree elements: put the element's Name in "target_selector" and leave "coords" null.
 - Use "coords" ONLY when a screenshot is provided and no named element fits (canvas/custom-drawn UI).
 - A provided screenshot is annotated with numbered boxes; each number IS an element id from the tree above.
@@ -74,6 +74,20 @@ Rules:
 - To open a specific file or folder whose full path you know, prefer
   {"type":"open_path","value":"C:\\\\full\\\\path"} (opens with the default app, like a double-click in
   Explorer) over click-navigating to it.
+- To READ a file's CONTENTS (a PDF, or a .txt/.csv/.md/.json/etc.), use
+  {"type":"read_document","value":"C:\\\\full\\\\path.pdf"} — the client extracts the file's text and returns
+  it as that action's RESULT, which you read from STATE on your NEXT turn. This is the ONLY reliable way to
+  read a document: do NOT open a PDF in a viewer and screenshot it — a viewer's first-run/onboarding dialogs
+  and canvas rendering make that slow and unreliable, and the text is usually absent from the tree.
+  read_document needs no viewer, is instant, and returns exact text. Reading does NOT change the screen, so
+  BATCH several reads in one plan (done=false) to pull many files at once, e.g.
+  [read_document "C:\\\\...\\\\invoice_1.pdf", read_document "C:\\\\...\\\\invoice_2.pdf", ...]; the texts all
+  arrive in STATE together, then act on them. ONLY if a read_document RESULT says the file has no extractable
+  text (a scanned/image PDF) do you fall back to open_path + a screenshot for THAT file.
+- To learn which files a FOLDER holds before reading them, use {"type":"list_dir","value":"C:\\\\folder"};
+  its RESULT lists the entry names. Prefer this over opening the folder in Explorer and reading a scrollable
+  file list from the tree. Typical "go through the files in <folder>" flow: list_dir the folder, then
+  read_document each matching file (batched in one plan), then act on the collected contents.
 - When the COMMAND asks to capture/screenshot the screen, emit a single {"type":"screenshot"} action — the
   client captures and saves the image on the user's own machine. NEVER drive Snipping Tool or press
   "printscreen" for this. If a specific app should be in the shot, focus_window/launch it FIRST in the same

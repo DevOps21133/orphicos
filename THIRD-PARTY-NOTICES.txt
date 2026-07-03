@@ -81,6 +81,9 @@ transitive tree; only dist/ is shipped, and dist/ is verified clean on every bui
 Genuinely used by the client at runtime (all permissive):
   windows-use 0.8.1 MIT · pywin32 312 (PSF/BSD-style) · comtypes 1.4.16 MIT ·
   pillow 12.3.0 MIT-CMU/HPND · rapidfuzz 3.14.5 MIT · tabulate 0.10.0 MIT ·
+  pypdf 6.14.2 BSD-3-Clause (client/perceive/documents.py — reads a PDF's text
+      directly off disk for the read_document perception mode; scanned PDFs fall
+      back to the screenshot path) ·
   httpx 0.28.1 BSD-3-Clause (client -> brain transport) ·
   fastapi 0.139.0 MIT · starlette 1.3.1 BSD-3-Clause · uvicorn 0.49.0 BSD-3-Clause
       (the local Phase 5 shell UI — see the next section)

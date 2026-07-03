@@ -5,7 +5,9 @@ windows-use (the focused-type SendKeys fallback) is patched so no keystrokes fir
 """
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from client.act import ActionError, Actor
@@ -16,7 +18,7 @@ from client.tests.fakes import FakeDesktop
 EXPECTED_VERBS = (
     "launch", "click", "double_click", "right_click",
     "type", "press", "scroll", "focus_window", "wait", "wait_for",
-    "set_clipboard", "open_path", "screenshot",
+    "set_clipboard", "open_path", "screenshot", "read_document", "list_dir",
 )
 
 
@@ -255,6 +257,52 @@ class ActionDispatchTests(unittest.TestCase):
         with self.assertRaises(ActionError) as ctx:
             Actor(desktop).execute({"type": "focus_window", "value": "Ghost"})
         self.assertIn("could not focus", str(ctx.exception))
+
+
+class ReadDocumentTests(unittest.TestCase):
+    """read_document / list_dir read the filesystem directly — no desktop involved."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.dir = Path(self._tmp.name)
+        self.actor = Actor(FakeDesktop())
+
+    def test_read_document_returns_named_contents(self):
+        (self.dir / "note.txt").write_text("vendor total 42", encoding="utf-8")
+        result = self.actor.execute(
+            {"type": "read_document", "value": str(self.dir / "note.txt")})
+        self.assertIn("note.txt contents", result)
+        self.assertIn("vendor total 42", result)
+
+    def test_read_document_missing_path_raises(self):
+        with self.assertRaises(ActionError):
+            self.actor.execute(
+                {"type": "read_document", "value": str(self.dir / "ghost.pdf")})
+
+    def test_read_document_on_folder_raises(self):
+        with self.assertRaises(ActionError) as ctx:
+            self.actor.execute({"type": "read_document", "value": str(self.dir)})
+        self.assertIn("list_dir", str(ctx.exception))  # points to the right tool
+
+    def test_read_document_unsupported_type_raises(self):
+        (self.dir / "pic.png").write_bytes(b"\x89PNG")
+        with self.assertRaises(ActionError):
+            self.actor.execute(
+                {"type": "read_document", "value": str(self.dir / "pic.png")})
+
+    def test_list_dir_lists_entries_sorted(self):
+        (self.dir / "b.pdf").write_text("y", encoding="utf-8")
+        (self.dir / "a.pdf").write_text("x", encoding="utf-8")
+        result = self.actor.execute({"type": "list_dir", "value": str(self.dir)})
+        self.assertIn("2 entries", result)
+        self.assertLess(result.index("a.pdf"), result.index("b.pdf"))  # sorted
+
+    def test_list_dir_on_file_raises(self):
+        f = self.dir / "a.txt"
+        f.write_text("x", encoding="utf-8")
+        with self.assertRaises(ActionError):
+            self.actor.execute({"type": "list_dir", "value": str(f)})
 
 
 class ScreenshotTests(unittest.TestCase):

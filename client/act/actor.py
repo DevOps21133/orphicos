@@ -513,3 +513,40 @@ class Actor:
             raise ActionError(f"path does not exist: {path}")
         os.startfile(str(path))
         return f"opened {path}"
+
+    def _do_read_document(self, action: dict, value) -> str:
+        """Read a document's text straight from disk (Rule 5, third perception mode):
+        exact content, no viewer, no file-association picker, no browser onboarding —
+        and far faster than screenshotting a rendered page. The extracted text becomes
+        this action's RESULT, which the brain reads from STATE on its next turn. A
+        scanned/image PDF yields NO_TEXT_MARKER so the brain falls back to open_path +
+        a screenshot for that file."""
+        from client.perceive.documents import read_document_text  # lazy: pulls pypdf only when used
+        raw = str(value or action.get("target_selector") or "").strip()
+        if not raw:
+            raise ActionError("read_document needs an absolute file path in 'value'")
+        path = Path(raw).expanduser()
+        if not path.exists():
+            raise ActionError(f"path does not exist: {path}")
+        if path.is_dir():
+            raise ActionError(f"read_document needs a file, not a folder — use list_dir for {path}")
+        try:
+            text = read_document_text(path)
+        except ValueError as e:
+            raise ActionError(str(e)) from e
+        return f"{path.name} contents:\n{text}"
+
+    def _do_list_dir(self, action: dict, value) -> str:
+        """List a folder's entries by name so the brain can drive a folder-of-files
+        task deterministically (which invoices exist, in what order) without opening
+        Explorer and reading a virtualized, scrollable file list from the tree."""
+        raw = str(value or action.get("target_selector") or "").strip()
+        if not raw:
+            raise ActionError("list_dir needs an absolute folder path in 'value'")
+        path = Path(raw).expanduser()
+        if not path.is_dir():
+            raise ActionError(f"not a folder: {path}")
+        names = sorted(p.name + ("\\" if p.is_dir() else "") for p in path.iterdir())
+        if not names:
+            return f"{path} is empty"
+        return f"{path} contains {len(names)} entries: " + ", ".join(names)
