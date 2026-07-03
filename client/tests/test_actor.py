@@ -38,8 +38,14 @@ class LabelResolutionTests(unittest.TestCase):
         self.assertEqual(self.actor._label_for("2"), 2)
 
     def test_out_of_range_digit_falls_through_to_no_match(self):
-        # "9" is not a valid index and matches no name -> None.
+        # "9" is not a valid index and matches no name -> None (-> ActionError upstream).
         self.assertIsNone(self.actor._label_for("9"))
+
+    def test_stale_digit_id_falls_back_to_name_match(self):
+        # A batched action's id can go stale after the screen changes: an out-of-range
+        # digit id must still resolve if an element NAME matches it.
+        actor = Actor(FakeDesktop(node_names=["Save", "7-Zip"]))
+        self.assertEqual(actor._label_for("7"), 1)
 
     def test_unknown_name_is_none(self):
         self.assertIsNone(self.actor._label_for("nonexistent-element"))

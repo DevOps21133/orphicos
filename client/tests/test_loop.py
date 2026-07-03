@@ -102,17 +102,21 @@ class ControlFlowTests(unittest.TestCase):
         self.assertEqual(outcome, "done")
         self.assertEqual(len(brain.seen), 2)  # failed attempt + successful retry
 
-    def test_stale_control_error_is_skipped_not_crash(self):
-        # windows-use raising a live-COM error (a control went stale) must SKIP the action,
-        # not crash the run — the loop's except ActionError relies on Actor converting it.
+    def test_stale_control_error_aborts_batch_not_crash(self):
+        # windows-use raising a live-COM error (a control went stale) must become a
+        # FAILED action + re-plan, not crash the run.
         desktop = FakeDesktop(node_names=["Save"], active_window="App",
                               raise_on_coords=RuntimeError("UIA_E_ELEMENTNOTAVAILABLE"))
-        brain = FakeBrain([_decision([{"type": "click", "target_selector": "Save"}], done=True)])
+        brain = FakeBrain([
+            _decision([{"type": "click", "target_selector": "Save"}], done=True),
+            _decision([WAIT0], done=True),  # the re-plan after the failure
+        ])
         events = []
         outcome = self._run(desktop, brain, on_event=events.append)
         self.assertEqual(outcome, "done")
         result_str = events[0]["actions"][0]["result"]
-        self.assertTrue(result_str.startswith("SKIPPED"), result_str)
+        self.assertTrue(result_str.startswith("FAILED"), result_str)
+        self.assertFalse(events[0]["done"])  # a failed batch can never claim done
 
     def test_max_steps_reached(self):
         desktop = FakeDesktop(node_names=["Save"], active_window="Loop")
@@ -121,16 +125,117 @@ class ControlFlowTests(unittest.TestCase):
         self.assertEqual(outcome, "max_steps")
         self.assertEqual(len(brain.seen), 3)
 
-    def test_action_error_is_caught_and_loop_continues(self):
-        # A target that resolves to nothing must be SKIPPED, not crash the loop.
+    def test_action_error_triggers_single_replan_with_failure_state(self):
+        # A target that resolves to nothing must FAIL the action, abort the rest of the
+        # batch, and cause exactly ONE re-plan call whose state names the failed action.
         desktop = FakeDesktop(node_names=["Save"], active_window="App")
-        brain = FakeBrain([_decision([{"type": "click", "target_selector": "Ghost"}], done=True)])
+        brain = FakeBrain([
+            _decision([{"type": "click", "target_selector": "Ghost"},
+                       {"type": "click", "target_selector": "Save"},
+                       WAIT0], done=True),
+            _decision([WAIT0], done=True),
+        ])
         events = []
         outcome = self._run(desktop, brain, on_event=events.append)
         self.assertEqual(outcome, "done")
-        self.assertEqual(len(events), 1)
-        result_str = events[0]["actions"][0]["result"]
-        self.assertTrue(result_str.startswith("SKIPPED"), result_str)
+        self.assertEqual(len(brain.seen), 2)  # failed batch + exactly one re-plan
+        # Remainder of the batch was aborted: only the failed action was attempted.
+        self.assertEqual(len(events[0]["actions"]), 1)
+        self.assertTrue(events[0]["actions"][0]["result"].startswith("FAILED"))
+        self.assertNotIn(("click", (100, 200), "left", 1), desktop.calls)
+        # The re-plan call carries the failure in state; the first call does not.
+        self.assertNotIn("failed_action", brain.seen[0]["state"])
+        failure = brain.seen[1]["state"]["failed_action"]
+        self.assertEqual(failure["action"]["type"], "click")
+        self.assertEqual(failure["action"]["target"], "Ghost")
+        self.assertIn("Ghost", failure["error"])
+        self.assertEqual(failure["plan_actions_dropped"], 2)
+        # The failure is reported once, then cleared.
+        self.assertEqual(len(brain.seen), 2)
+
+    def test_batch_executes_in_order_without_extra_brain_calls(self):
+        desktop = FakeDesktop(node_names=["Save", "Close"], active_window="App")
+        brain = FakeBrain([_decision([
+            {"type": "click", "target_selector": "Save"},
+            {"type": "click", "target_selector": "Close"},
+            WAIT0,
+        ], done=True)])
+        events = []
+        outcome = self._run(desktop, brain, on_event=events.append)
+        self.assertEqual(outcome, "done")
+        self.assertEqual(len(brain.seen), 1)  # ONE round trip for the whole plan
+        clicks = [c for c in desktop.calls if c[0] == "click"]
+        self.assertEqual(clicks, [("click", (100, 200), "left", 1),
+                                  ("click", (101, 201), "left", 1)])
+        self.assertEqual(events[0]["timings"]["actions_executed"], 3)
+
+    def test_kill_switch_interrupts_between_batch_actions(self):
+        desktop = FakeDesktop(node_names=["Save", "Close"], active_window="App")
+        brain = FakeBrain([_decision([
+            {"type": "click", "target_selector": "Save"},
+            {"type": "click", "target_selector": "Close"},
+        ], done=True)])
+        checks = {"n": 0}
+
+        def stop_after_first_action():  # step check + action-1 check pass, then stop
+            checks["n"] += 1
+            return checks["n"] > 2
+
+        outcome = self._run_with_hooks(desktop, brain, should_stop=stop_after_first_action)
+        self.assertEqual(outcome, "stopped")
+        clicks = [c for c in desktop.calls if c[0] == "click"]
+        self.assertEqual(len(clicks), 1)  # first action ran, second was interrupted
+
+    def test_approval_gate_scans_whole_batch_before_action_one(self):
+        # A denied risky action LATER in the plan must prevent even the safe first
+        # action from running — the gate pre-scans the entire batch.
+        desktop = FakeDesktop(node_names=["Save", "Delete file"], active_window="App")
+        brain = FakeBrain([_decision([
+            {"type": "click", "target_selector": "Save"},
+            {"type": "click", "target_selector": "Delete file"},
+        ], done=True)])
+        asked = []
+
+        def deny_risky(action):
+            asked.append(action)
+            return "delete" not in str(action.get("target_selector") or "").lower()
+
+        events = []
+        outcome = self._run_with_hooks(desktop, brain, approve=deny_risky,
+                                       on_event=events.append)
+        self.assertEqual(outcome, "stopped")
+        self.assertEqual(len(asked), 2)  # every batch action was inspected
+        self.assertEqual([c for c in desktop.calls if c[0] == "click"], [])  # NOTHING ran
+        self.assertEqual(events[0]["actions"][0]["result"], "SKIPPED: not approved")
+        self.assertEqual(events[0]["timings"]["actions_executed"], 0)
+
+    def test_screen_changing_action_refreshes_snapshot_mid_batch(self):
+        # An element that only exists AFTER the batch's press must still resolve,
+        # because the loop re-snapshots the desktop between batched actions.
+        desktop = FakeDesktop(node_names=["Address bar"], active_window="App")
+        real_get_state = desktop.get_state
+        seen = {"n": 0}
+
+        def refreshing_get_state():
+            seen["n"] += 1
+            if seen["n"] == 2:  # the intra-batch refresh (call 1 is the perceive)
+                desktop.set_nodes(["Save"])
+            return real_get_state()
+
+        desktop.get_state = refreshing_get_state
+        brain = FakeBrain([_decision([
+            {"type": "press", "value": "ctrl+l"},
+            {"type": "click", "target_selector": "Save"},
+        ], done=True)])
+        with patch("client.act.actor.foreground_console_label", return_value=None):
+            outcome = self._run(desktop, brain)
+        self.assertEqual(outcome, "done")
+        self.assertGreaterEqual(seen["n"], 2)
+        self.assertIn(("click", (100, 200), "left", 1), desktop.calls)
+
+    def _run_with_hooks(self, desktop, brain, should_stop=None, approve=None,
+                        on_event=lambda e: None):
+        return run_command("do a thing", desktop, brain, 5, on_event, should_stop, approve)
 
 
 class PerceptionAndStateTests(unittest.TestCase):

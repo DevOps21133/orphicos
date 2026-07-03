@@ -57,9 +57,14 @@ class FakeDesktop:
         self._raise_on_coords = raise_on_coords
         self.calls: list[tuple] = []
 
-    # --- perception (used by Perceiver) ------------------------------------
+    # --- perception (used by Perceiver, and by the loop's intra-batch refresh) --
     def get_state(self) -> FakeDesktopState:
+        self.calls.append(("get_state",))
         return self.desktop_state
+
+    def set_nodes(self, node_names: list[str]) -> None:
+        """Simulate a screen change: replace the interactive nodes of the snapshot."""
+        self._tree.interactive_nodes = [FakeNode(n) for n in node_names]
 
     def get_screenshot(self, as_bytes: bool = False):
         return self._screenshot if as_bytes else "<screenshot>"

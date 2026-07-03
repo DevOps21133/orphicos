@@ -107,7 +107,8 @@ class LoopHookTests(unittest.TestCase):
                               approve=lambda a: False)
         self.assertEqual(outcome, "stopped")
         self.assertEqual(events[0]["actions"][0]["result"], "SKIPPED: not approved")
-        self.assertEqual(desktop.calls, [])              # the risky key was never pressed
+        # The risky key was never pressed (get_state is just the perceive snapshot).
+        self.assertEqual([c for c in desktop.calls if c[0] != "get_state"], [])
 
     def test_approve_allowed_action_runs(self):
         desktop = FakeDesktop(node_names=["Save"], active_window="App")
