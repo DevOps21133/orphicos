@@ -161,6 +161,14 @@ def create_app(submit: SubmitFn, health_check: Callable[[], bool],
                              "voice": voice is not None,
                              "voice_hotkey": getattr(voice, "HOTKEY", None)})
 
+    @app.post("/api/stop")
+    async def stop_endpoint() -> JSONResponse:
+        # The on-screen STOP button uses plain HTTP: the kill path must not depend on
+        # the WebSocket being connected (a stop silently dropped mid-reconnect while
+        # the machine keeps acting is the worst possible failure of this button).
+        stopped, dropped = _stop_everything(hub)
+        return JSONResponse({"stopped": stopped, "dropped": dropped})
+
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket) -> None:
         origin = ws.headers.get("origin")
@@ -213,18 +221,24 @@ async def _handle(msg: dict, hub: Hub, submit: SubmitFn, ws: WebSocket,
             _start_session(session, hub, submit)
 
     elif kind == "stop":
-        session, dropped = hub.stop_all()
-        if session is not None:
-            note = f" {dropped} queued command(s) discarded." if dropped else ""
-            hub.emit({"type": "status", "message": f"Stopping…{note}"})
-            if dropped:
-                hub.emit({"type": "queue", "commands": []})
+        _stop_everything(hub)
 
     elif kind == "approve":
         session = hub.active
         if session is not None:
             session.resolve_approval(int(msg.get("id", 0)),
                                      msg.get("decision") == "approve")
+
+
+def _stop_everything(hub: Hub) -> tuple[bool, int]:
+    """Kill switch core, shared by the WS message, the HTTP endpoint, and tests."""
+    session, dropped = hub.stop_all()
+    if session is not None:
+        note = f" {dropped} queued command(s) discarded." if dropped else ""
+        hub.emit({"type": "status", "message": f"Stopping…{note}"})
+        if dropped:
+            hub.emit({"type": "queue", "commands": []})
+    return session is not None, dropped
 
 
 def _start_session(session: RunSession, hub: Hub, submit: SubmitFn) -> None:

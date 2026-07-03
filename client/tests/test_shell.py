@@ -213,6 +213,21 @@ class ShellAppTests(unittest.TestCase):
         with TestClient(app_down) as client:
             self.assertFalse(client.get("/api/status").json()["connected"])
 
+    def test_http_stop_halts_the_active_run_and_drops_the_queue(self):
+        # The STOP button stops via plain HTTP: it must work while the WS is down.
+        app = create_app(submit=lambda s, d: None, health_check=lambda: True)
+        with TestClient(app) as client:
+            hub = app.state.hub
+            self.assertFalse(client.post("/api/stop").json()["stopped"])  # idle no-op
+            active = RunSession("open notepad", hub.emit)
+            hub.admit(active)
+            hub.admit(RunSession("open calculator", hub.emit))
+            body = client.post("/api/stop").json()
+            self.assertTrue(body["stopped"])
+            self.assertEqual(body["dropped"], 1)
+            self.assertTrue(active.should_stop())
+            self.assertEqual(hub.queued_commands(), [])
+
     def test_status_replays_active_and_queued_commands(self):
         # A refreshed page rebuilds its view from /api/status: the active command and
         # the queue must be visible there, not only in live WebSocket events.
