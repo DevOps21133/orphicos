@@ -1,6 +1,6 @@
 # OrphicOS landing page
 
-Static site: `index.html` + `styles.css` + `assets/`. No build step, no JS, no external requests (system fonts only).
+Static site, currently three design variants under review: `a/` (Museum plate), `b/` (Terminal heritage), `c/` (Type only) — each self-contained (`index.html` + `styles.css`) over shared `assets/`. The root `index.html` is an internal review page linking the three; replace it with the winning variant's page (fixing the `../assets` and `../download` paths) before deployment. No build step, no JS, no external requests (system fonts only). Design rationale in `design-research.md`.
 
 ## Deploy
 
@@ -20,6 +20,6 @@ The download button links to `download/OrphicOS-Setup.exe` (relative). Place the
 
 - `assets/src/hero-banner.png` — original artwork (source of truth; not referenced by the page).
 - `assets/hero-banner.webp` / `.jpg` — optimized hero (served).
-- `assets/wave-strip.*`, `assets/storm-dim.*` — texture crops derived from the original (section divider, download background).
+- `assets/wave-strip.*`, `assets/storm-dim.*`, `assets/ship-mark.*` — texture/detail crops derived from the original.
 
-Design tokens (colors) in `styles.css` are pixel-sampled from the hero artwork; provenance is commented inline. Artwork provenance is recorded in `THIRD-PARTY-NOTICES.txt` at the repo root.
+Design tokens (colors) in each variant's `styles.css` are pixel-sampled from the hero artwork; provenance is commented inline. Artwork provenance is recorded in `THIRD-PARTY-NOTICES.txt` at the repo root.
