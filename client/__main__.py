@@ -22,6 +22,9 @@ def _print_event(event: dict) -> None:
     for r in event["actions"]:
         target = r["target"] or (r["value"] if r["value"] is not None else "")
         print(f"   -> {r['type']} {target}  ::  {r['result']}")
+    timings = event.get("timings")
+    if timings:  # metadata only (Rule 4): per-step latency breakdown in ms
+        print("   [latency " + " ".join(f"{k}={v}" for k, v in timings.items()) + "]")
     if event["done"]:
         print("   [brain reports the command is complete]")
 

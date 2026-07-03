@@ -7,7 +7,7 @@ fires only when the tree yields no interactive elements (Rule 5).
 """
 from __future__ import annotations
 
-from time import sleep
+from time import perf_counter, sleep
 from typing import Callable
 
 from client._engine import Desktop
@@ -51,24 +51,42 @@ def run_command(
     for step in range(1, max_steps + 1):
         if should_stop is not None and should_stop():
             return "stopped"
+        t_perceive = perf_counter()
         perception = perceiver.perceive()
         screenshot = perceiver.capture_screenshot() if perception.is_empty else None
+        perceive_ms = int((perf_counter() - t_perceive) * 1000)
         state = {"steps": history[-5:]}  # small; the server also truncates state
 
         decision = None
         for attempt in range(_DECIDE_RETRIES + 1):
             try:
+                t_decide = perf_counter()
                 decision = brain.decide(command, perception.ui_tree, state, screenshot)
+                decide_ms = int((perf_counter() - t_decide) * 1000)
                 break
             except BrainError as e:
                 if attempt >= _DECIDE_RETRIES:  # exhausted retries -> stop cleanly, don't crash
                     on_event({"step": step, "reasoning": f"brain error: {e}",
-                              "used_vision": screenshot is not None, "actions": [], "done": False})
+                              "used_vision": screenshot is not None, "actions": [],
+                              "done": False, "timings": {"perceive_ms": perceive_ms}})
                     return "brain_error"
                 sleep(_RETRY_BACKOFF)  # transient -> wait a beat and retry the same step
 
         actions = decision.get("actions") or []
         summary = decision.get("reasoning_summary", "")
+
+        # Per-step latency breakdown (metadata only — never screen data, Rule 4):
+        # perceive = UIA read+serialize here; decide = full round trip; brain/server
+        # come from the server's own timings; net = round trip minus server time.
+        timings = {"perceive_ms": perceive_ms, "decide_ms": decide_ms}
+        server_timings = decision.get("timings") or {}
+        if isinstance(server_timings, dict):
+            llm_ms, server_ms = server_timings.get("llm_ms"), server_timings.get("server_ms")
+            if isinstance(llm_ms, int):
+                timings["brain_ms"] = llm_ms
+            if isinstance(server_ms, int):
+                timings["server_ms"] = server_ms
+                timings["net_ms"] = max(decide_ms - server_ms, 0)
         results = []
         stopped = False
         for a in actions:
@@ -93,7 +111,7 @@ def run_command(
 
         done = bool(decision.get("done")) and not stopped
         on_event({"step": step, "reasoning": summary, "used_vision": screenshot is not None,
-                  "actions": results, "done": done})
+                  "actions": results, "done": done, "timings": timings})
         history.append({"step": step, "reasoning": summary,
                         "actions": [{"type": r["type"], "target": r["target"]} for r in results]})
 

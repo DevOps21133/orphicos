@@ -37,6 +37,20 @@ class ControlFlowTests(unittest.TestCase):
         self.assertEqual(len(brain.seen), 1)
         self.assertIn(("app", "launch", "notepad"), desktop.calls)
 
+    def test_step_event_carries_latency_breakdown(self):
+        desktop = FakeDesktop(node_names=["Save"], active_window="Untitled - Notepad")
+        decision = _decision([LAUNCH], done=True)
+        decision["timings"] = {"llm_ms": 900, "server_ms": 1000}
+        brain = FakeBrain([decision])
+        events = []
+        self._run(desktop, brain, on_event=events.append)
+        t = events[0]["timings"]
+        self.assertIn("perceive_ms", t)
+        self.assertIn("decide_ms", t)
+        self.assertEqual(t["brain_ms"], 900)
+        self.assertEqual(t["server_ms"], 1000)
+        self.assertEqual(t["net_ms"], max(t["decide_ms"] - 1000, 0))
+
     def test_multi_step_until_done(self):
         desktop = FakeDesktop(node_names=["Save"], active_window="Book1 - Excel")
         brain = FakeBrain([

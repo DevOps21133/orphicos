@@ -10,6 +10,7 @@ Run locally:
 from __future__ import annotations
 
 import logging
+import time
 from pathlib import Path
 from typing import Any, Optional
 
@@ -84,6 +85,9 @@ class CommandResponse(BaseModel):
     actions: list[Action]
     done: bool
     reasoning_summary: str
+    # Latency metadata for the client's per-step breakdown (numbers only — never
+    # screen data, Rule 4): llm_ms = provider call, server_ms = total server time.
+    timings: Optional[dict[str, int]] = None
 
 
 class Credentials(BaseModel):
@@ -135,10 +139,19 @@ async def health() -> dict[str, str]:
 
 
 @app.post("/command", response_model=CommandResponse)
-async def command(req: CommandRequest, user_id: str = Depends(current_user)) -> CommandResponse:
+def command(req: CommandRequest, user_id: str = Depends(current_user)) -> CommandResponse:
+    # Deliberately sync: FastAPI runs sync endpoints on the threadpool, so the
+    # blocking LLM call cannot freeze the event loop. (As `async def` it did —
+    # one slow/hung provider call stalled /health and every other user's step.)
+    t0 = time.monotonic()
     try:
         decision, usage = brain.decide(req.command, req.ui_tree, req.state, req.screenshot)
-        response = CommandResponse(**decision)  # build inside the guard: a bad shape → 502, not 500
+        server_ms = int((time.monotonic() - t0) * 1000)
+        timings = {"server_ms": server_ms}
+        if isinstance(usage.get("latency_ms"), int):
+            timings["llm_ms"] = usage["latency_ms"]
+        # build inside the guard: a bad shape → 502, not 500
+        response = CommandResponse(**decision, timings=timings)
     except Exception as e:  # noqa: BLE001 - never surface engine internals to the client
         log.error("brain error user=%s err=%s", user_id, type(e).__name__)
         raise HTTPException(status_code=502, detail="Engine could not produce a decision.")

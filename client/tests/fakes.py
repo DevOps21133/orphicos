@@ -13,22 +13,17 @@ class FakeNode:
     """Stands in for a windows-use TreeElementNode (only .name is read by the Actor)."""
 
     def __init__(self, name: str, control_type: str = "ButtonControl",
-                 window_name: str = "Test Window") -> None:
+                 window_name: str = "Test Window", metadata: dict | None = None) -> None:
         self.name = name
         self.control_type = control_type
         self.window_name = window_name
+        self.metadata = metadata or {}
 
 
 class FakeTreeState:
     def __init__(self, nodes: list[FakeNode], status: bool = True) -> None:
         self.interactive_nodes = list(nodes)
         self.status = status
-
-    def interactive_elements_to_string(self) -> str:
-        rows = ["# id|window|control_type|name|coords|metadata"]
-        for i, n in enumerate(self.interactive_nodes):
-            rows.append(f"{i}|{n.window_name}|{n.control_type}|{n.name}|(0,0)|{{}}")
-        return "\n".join(rows)
 
 
 class FakeWindow:
