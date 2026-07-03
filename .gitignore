@@ -3,8 +3,9 @@
 # .env.example files are intentionally tracked and are NOT matched by this rule.
 **/.env
 
-# Per-user auth tokens (issued at runtime; not for git)
+# Per-user auth tokens + accounts (issued at runtime; not for git)
 server/tokens.json
+server/users.json
 
 # Per-machine client config (SERVER_BASE etc.); config.example.toml is tracked instead
 client/config.toml
