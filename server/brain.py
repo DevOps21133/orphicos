@@ -54,9 +54,11 @@ Rules:
 - Use "coords" ONLY when a screenshot is provided and no named element fits (canvas/custom-drawn UI).
 - A provided screenshot is annotated with numbered boxes; each number IS an element id from the tree above.
   Prefer that id or the element's name in "target_selector"; use raw "coords" only for a spot with no box.
-- Set "need_screenshot": true and END the plan (done=false) when the tree cannot show what you must know —
-  e.g. to read canvas/custom-drawn content or visually verify a result. Never request one when the tree
-  already answers the question: screenshots cost latency.
+- Set "need_screenshot": true and END the plan (done=false) ONLY when THIS message's tree cannot show what
+  you must know — e.g. to read canvas/custom-drawn content or visually verify a result. NEVER request one
+  alongside actions that open or change a window: after your actions run you automatically get the NEW tree,
+  which is almost always enough — standard Windows apps (Settings, Explorer, Office, browsers) have complete
+  trees. Never request one when the tree already answers the question: screenshots cost latency.
 - "value" holds: the app name for launch; the text for type; the key chord for press (e.g. "ctrl+s", "enter");
   the direction for scroll ("up"/"down"); the number of seconds for wait; for wait_for the name of the
   element/window to wait for (prefix "gone:" to wait until it disappears); the text for set_clipboard; the
