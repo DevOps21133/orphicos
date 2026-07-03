@@ -47,7 +47,18 @@ Rules:
 - Use "coords" ONLY when a screenshot is provided and no named element fits (canvas/custom-drawn UI).
 - "value" holds: the app name for launch; the text for type; the key chord for press (e.g. "ctrl+s", "enter");
   the direction for scroll ("up"/"down"); or the number of seconds for wait.
-- Emit the smallest set of actions you are confident about for THIS screen; you will be called again with the next tree.
+- BATCH AGGRESSIVELY: "actions" is an ORDERED PLAN the client executes in sequence WITHOUT consulting you between
+  steps. Every extra call to you costs ~10 seconds, so chain as MANY actions as you can confidently predict from
+  THIS screen: launch an app and immediately type into it (a launch guarantees the app owns the foreground before
+  the next action runs); fill a whole form or column in one plan; create AND rename in one plan. Cut the plan off
+  only at the first step whose correct next move depends on seeing a screen you cannot predict — you will then be
+  called again with a fresh tree.
+- STALE IDS: numeric element ids are indices into the tree above; they are invalid after any action that changes
+  the screen (launch, focus_window, a click that opens/closes something, "enter"). For every action AFTER the first
+  screen-changing action in your plan, put the element's NAME in "target_selector" (or null to act on the focused
+  control) — never a numeric id.
+- If an action in your plan fails, the client aborts the rest of the plan and calls you again; STATE will contain
+  "failed_action" describing which action failed and why. Re-plan from the fresh tree — do not blindly repeat it.
 - Keep "reasoning_summary" to one sentence and NEVER copy screen contents into it.
 
 How to accomplish tasks:
@@ -163,7 +174,7 @@ def _create_completion(client: OpenAI, model: str, messages: list[dict]):
     for extra in attempts:
         try:
             return client.chat.completions.create(
-                model=model, messages=messages, temperature=0.2, max_tokens=1024, **extra,
+                model=model, messages=messages, temperature=0.2, max_tokens=2048, **extra,
             )
         except BadRequestError as e:
             # Most likely an unsupported optional param (response_format) — drop it and
