@@ -66,6 +66,8 @@ class FakeDesktop:
         win = FakeWindow(active_window) if active_window else None
         self.desktop_state = FakeDesktopState(self._tree, win)
         self._screenshot = screenshot
+        # Size of the fake full-virtual-desktop PIL capture (tests override to check cropping).
+        self._shot_size = (600, 400)
         # Set to simulate windows-use raising a live-COM error (e.g. a control that went
         # stale between perception and action) — see FakeDesktop.get_coordinates_from_label.
         self._raise_on_coords = raise_on_coords
@@ -82,11 +84,17 @@ class FakeDesktop:
                                         for n in node_names]
 
     def get_screenshot(self, as_bytes: bool = False):
-        return self._screenshot if as_bytes else "<screenshot>"
+        return self._screenshot if as_bytes else self._pil()
 
     def get_annotated_screenshot(self, nodes=None, as_bytes: bool = False):
         self.calls.append(("get_annotated_screenshot", len(nodes or [])))
-        return self._screenshot if as_bytes else "<annotated>"
+        return self._screenshot if as_bytes else self._pil()
+
+    def _pil(self):
+        # capture_screenshot() crops+encodes a PIL image (as_bytes=False); real
+        # windows-use returns one here. Default full-virtual-desktop size.
+        from PIL import Image
+        return Image.new("RGB", self._shot_size, (12, 34, 56))
 
     # --- element resolution (used by Actor) --------------------------------
     def get_coordinates_from_label(self, label: int) -> tuple[int, int]:

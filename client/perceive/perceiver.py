@@ -18,6 +18,9 @@ interactive_nodes list — trimming never renumbers, so the Actor's id resolutio
 from __future__ import annotations
 
 import base64
+import ctypes
+import io
+from ctypes import wintypes
 from dataclasses import dataclass
 
 from client._engine import Desktop
@@ -27,6 +30,51 @@ from client._engine import Desktop
 MAX_TREE_ELEMENTS = 300
 # A handful of scrollable panes is plenty of signal; more is nested-container noise.
 MAX_SCROLLABLE_ELEMENTS = 8
+
+# --- Vision-fallback framing (Rule 5) --------------------------------------------
+# windows-use captures the ENTIRE multi-monitor virtual desktop. The vision model
+# downscales any image to its own max input size, so a full-desktop shot renders
+# small on-screen text (a stock price, a spreadsheet cell) into an illegible smudge
+# and the model guesses (it once wrote a from-memory BTC price over the real one).
+# We crop the fallback to the ACTIVE window: the relevant content fills the frame,
+# stays legible after downscaling, and the payload roughly halves (also faster).
+_ANNOTATION_PAD = 5  # windows-use pads the annotated image 5px at the top-left
+
+
+def _virtual_origin() -> tuple[int, int]:
+    """Top-left of the virtual desktop in screen coords (the multi-monitor offset)."""
+    u = ctypes.windll.user32
+    return u.GetSystemMetrics(76), u.GetSystemMetrics(77)  # SM_X/YVIRTUALSCREEN
+
+
+def _foreground_rect() -> tuple[int, int, int, int] | None:
+    """The active window's screen rectangle, or None if it can't be read."""
+    u = ctypes.windll.user32
+    hwnd = u.GetForegroundWindow()
+    if not hwnd:
+        return None
+    r = wintypes.RECT()
+    if not u.GetWindowRect(hwnd, ctypes.byref(r)) or r.right <= r.left or r.bottom <= r.top:
+        return None
+    return r.left, r.top, r.right, r.bottom
+
+
+def _crop_to_active_window(img, pad: int):
+    """Crop a full-virtual-desktop capture down to the active window so its text
+    survives the vision model's downscaling. Returns the image unchanged if the
+    active window can't be located or the crop would be a degenerate sliver.
+    Assumes 100% display scaling (CLAUDE.md Rule 11) — physical and logical pixels
+    coincide, so window rect and screenshot pixels share one coordinate space."""
+    rect = _foreground_rect()
+    if rect is None:
+        return img
+    vx, vy = _virtual_origin()
+    left, top, right, bottom = rect
+    box = (max(left - vx + pad, 0), max(top - vy + pad, 0),
+           min(right - vx + pad, img.width), min(bottom - vy + pad, img.height))
+    if box[2] - box[0] < 100 or box[3] - box[1] < 100:
+        return img  # a sliver of the wrong thing is worse than the whole frame
+    return img.crop(box)
 
 
 @dataclass
@@ -213,20 +261,31 @@ class Perceiver:
         return Perception(ui_tree=ui_tree, is_empty=insufficient)
 
     def capture_screenshot(self) -> str:
-        """Base64 PNG of the screen — sent only on the vision fallback (Rule 5).
+        """Base64 PNG of the ACTIVE WINDOW — sent only on the vision fallback (Rule 5).
 
-        When the snapshot has interactive elements, the shot is annotated with
-        numbered boxes whose labels ARE the tree ids, so the brain can keep
-        answering with ids/names instead of raw coordinates.
+        The capture is cropped to the foreground window so small on-screen text
+        (prices, cell values) stays legible after the vision model downscales it; a
+        full multi-monitor frame shrinks that text into an unreadable smudge and the
+        model guesses. When the snapshot has interactive elements, the shot is
+        annotated with numbered boxes whose labels ARE the tree ids, so the brain can
+        keep answering with ids/names instead of raw coordinates.
         """
         state = getattr(self._desktop, "desktop_state", None)
         nodes = state.tree_state.interactive_nodes if state and state.tree_state else []
-        png = None
+        img = None
+        pad = 0
         if nodes:
             try:
-                png = self._desktop.get_annotated_screenshot(nodes=nodes, as_bytes=True)
+                img = self._desktop.get_annotated_screenshot(nodes=nodes, as_bytes=False)
+                pad = _ANNOTATION_PAD
             except Exception:
-                png = None  # annotation is best-effort; the plain screen still helps
-        if png is None:
-            png = self._desktop.get_screenshot(as_bytes=True)
+                img = None  # annotation is best-effort; the plain screen still helps
+        if img is None:
+            img = self._desktop.get_screenshot(as_bytes=False)
+            pad = 0
+        img = _crop_to_active_window(img, pad)
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        png = buffer.getvalue()
+        buffer.close()
         return base64.b64encode(png).decode("ascii")

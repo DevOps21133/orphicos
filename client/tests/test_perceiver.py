@@ -6,9 +6,14 @@ serialize_tree / Perceiver code under test is the genuine product code.
 from __future__ import annotations
 
 import base64
+import io
 import unittest
+from unittest import mock
+
+from PIL import Image
 
 from client.perceive import Perceiver
+from client.perceive import perceiver as perceiver_mod
 from client.perceive.perceiver import (MAX_SCROLLABLE_ELEMENTS, MAX_TREE_ELEMENTS,
                                        serialize_scrollables, serialize_tree)
 from client.tests.fakes import FakeDesktop, FakeNode
@@ -165,16 +170,28 @@ class InsufficiencyTest(unittest.TestCase):
 
 
 class CaptureScreenshotTest(unittest.TestCase):
+    """The fallback returns a base64 PNG cropped to the active window (Rule 5).
+
+    _foreground_rect is patched to None here so cropping is a no-op — these cases
+    assert WHICH capture path ran; the crop geometry is covered separately below.
+    """
+
+    @staticmethod
+    def _decode(b64: str) -> Image.Image:
+        return Image.open(io.BytesIO(base64.b64decode(b64)))
+
     def test_annotated_when_tree_has_nodes(self) -> None:
         desktop = FakeDesktop(node_names=["Close"], active_window="Game")
-        out = Perceiver(desktop).capture_screenshot()
-        self.assertEqual(base64.b64decode(out), b"\x89PNG-fake")
+        with mock.patch.object(perceiver_mod, "_foreground_rect", return_value=None):
+            out = Perceiver(desktop).capture_screenshot()
+        self.assertEqual(self._decode(out).format, "PNG")
         self.assertIn(("get_annotated_screenshot", 1), desktop.calls)
 
     def test_plain_when_tree_has_no_nodes(self) -> None:
         desktop = FakeDesktop(node_names=[], active_window="Game")
-        out = Perceiver(desktop).capture_screenshot()
-        self.assertEqual(base64.b64decode(out), b"\x89PNG-fake")
+        with mock.patch.object(perceiver_mod, "_foreground_rect", return_value=None):
+            out = Perceiver(desktop).capture_screenshot()
+        self.assertEqual(self._decode(out).format, "PNG")
         self.assertNotIn("get_annotated_screenshot",
                          [c[0] for c in desktop.calls])
 
@@ -185,8 +202,29 @@ class CaptureScreenshotTest(unittest.TestCase):
             raise RuntimeError("draw failed")
 
         desktop.get_annotated_screenshot = boom
-        out = Perceiver(desktop).capture_screenshot()
-        self.assertEqual(base64.b64decode(out), b"\x89PNG-fake")
+        with mock.patch.object(perceiver_mod, "_foreground_rect", return_value=None):
+            out = Perceiver(desktop).capture_screenshot()
+        self.assertEqual(self._decode(out).format, "PNG")
+
+    def test_crops_to_active_window(self) -> None:
+        # Full capture is 600x400; the active window is a 300x200 sub-rect at (100,50).
+        desktop = FakeDesktop(node_names=[], active_window="Game")
+        desktop._shot_size = (600, 400)
+        with mock.patch.object(perceiver_mod, "_foreground_rect",
+                               return_value=(100, 50, 400, 250)), \
+             mock.patch.object(perceiver_mod, "_virtual_origin", return_value=(0, 0)):
+            out = Perceiver(desktop).capture_screenshot()
+        self.assertEqual(self._decode(out).size, (300, 200))
+
+    def test_degenerate_crop_keeps_full_frame(self) -> None:
+        # A sliver (<100px) of the active window is worse than the whole screen.
+        desktop = FakeDesktop(node_names=[], active_window="Game")
+        desktop._shot_size = (600, 400)
+        with mock.patch.object(perceiver_mod, "_foreground_rect",
+                               return_value=(0, 0, 40, 400)), \
+             mock.patch.object(perceiver_mod, "_virtual_origin", return_value=(0, 0)):
+            out = Perceiver(desktop).capture_screenshot()
+        self.assertEqual(self._decode(out).size, (600, 400))
 
 
 if __name__ == "__main__":
