@@ -159,6 +159,14 @@ forbidden AGPL/SSPL/BSL set — flagged for review:
   Python TLS; tqdm is a required openai dependency). See docs/runbook.md.
 
 --------------------------------------------------------------------------------
+Server deployment infrastructure   (server host only; never shipped)
+--------------------------------------------------------------------------------
+  Caddy        2.x (Docker image caddy:2-alpine)   Apache-2.0
+      TLS-terminating reverse proxy in server/docker-compose.yml.
+  Docker Engine / Compose                          Apache-2.0
+      Container runtime on the server host; not part of any OrphicOS artifact.
+
+--------------------------------------------------------------------------------
 Packaging toolchain   (build-time; Phase 6)
 --------------------------------------------------------------------------------
 Used to BUILD the Windows client package. Except for PyInstaller's bootloader (see

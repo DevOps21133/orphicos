@@ -12,12 +12,16 @@ CLI:
 from __future__ import annotations
 
 import json
+import os
 import secrets
 import sys
 import threading
 from pathlib import Path
 
-_TOKENS_PATH = Path(__file__).with_name("tokens.json")
+# Deployed (Docker) installs point this at a volume so tokens survive redeploys;
+# dev keeps server/tokens.json next to this file.
+_TOKENS_PATH = Path(os.environ.get("ORPHIC_TOKENS_PATH")
+                    or Path(__file__).with_name("tokens.json"))
 _lock = threading.Lock()
 _usage: dict[str, int] = {}
 _cache: dict = {"mtime": None, "data": {}}  # mtime-keyed cache; avoids a disk read per request

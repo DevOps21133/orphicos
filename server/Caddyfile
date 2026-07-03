@@ -1,0 +1,8 @@
+# OrphicOS brain — TLS termination. DOMAIN comes from docker-compose environment.
+# No access log (zero-retention, Rule 4): request bodies/URLs are never written to disk.
+{$DOMAIN} {
+	request_body {
+		max_size 10MB
+	}
+	reverse_proxy brain:8000
+}
