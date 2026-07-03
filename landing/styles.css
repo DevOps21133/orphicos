@@ -1,4 +1,4 @@
-/* Variant A — "Museum plate".
+/* OrphicOS landing — "Museum plate" (promoted from variant A).
    Gallery-wall bone ground, the artwork framed as an exhibit, factual plate.
    All hues sampled from landing/assets/src/hero-banner.png (see design tokens);
    derived shades mix a sampled hue with black/white only.
@@ -121,6 +121,49 @@ section:not(.hero):not(.exhibit) {
 
 .body-large { font-size: 1.625rem; line-height: 1.6; }
 
+/* ---- specimen: one command, catalogued ---- */
+
+.catalog {
+  border: 1px solid var(--bone);
+  background: var(--wall-2);
+  padding: 32px;
+}
+
+.catalog-command {
+  font-family: "Iowan Old Style", Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-size: 1.625rem;
+  line-height: 1.4;
+}
+
+.catalog-record { margin-top: 24px; }
+
+.catalog-record div {
+  display: flex;
+  gap: 16px;
+  padding: 8px 0;
+  border-top: 1px solid var(--bone);
+}
+
+.catalog-record dt {
+  flex: 0 0 6rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--sail);
+  padding-top: 4px;
+}
+
+.catalog-record dd { color: var(--mid); }
+
+.catalog-note {
+  margin-top: 24px;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--grey);
+}
+
 /* ---- steps ---- */
 
 .steps { list-style: none; counter-reset: step; }
@@ -200,4 +243,7 @@ footer a:hover { color: var(--ink); }
   section:not(.hero):not(.exhibit) { padding: 64px 24px; }
   .exhibit { padding-bottom: 80px; }
   .frame { padding: 8px; }
+  .catalog { padding: 24px 16px; }
+  .catalog-command { font-size: 1.375rem; }
+  .catalog-record div { flex-direction: column; gap: 4px; }
 }
