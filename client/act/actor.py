@@ -298,11 +298,19 @@ class Actor:
 
     def _do_open_path(self, action: dict, value) -> str:
         """Open a file/folder with its default handler — the reliable equivalent
-        of double-clicking it in Explorer, without any click-navigation."""
-        raw = value or action.get("target_selector")
+        of double-clicking it in Explorer, without any click-navigation. Also
+        accepts an http(s) URL, which opens in the default browser (the server's
+        skill-checkout upsell uses this); other URL schemes are refused."""
+        raw = str(value or action.get("target_selector") or "").strip()
         if not raw:
             raise ActionError("open_path needs an absolute file/folder path in 'value'")
-        path = Path(str(raw)).expanduser()
+        lowered = raw.lower()
+        if "://" in lowered:
+            if not lowered.startswith(("http://", "https://")):
+                raise ActionError(f"refused to open non-http URL scheme: {raw.split('://', 1)[0]}")
+            os.startfile(raw)
+            return f"opened {raw} in the browser"
+        path = Path(raw).expanduser()
         if not path.exists():
             raise ActionError(f"path does not exist: {path}")
         os.startfile(str(path))

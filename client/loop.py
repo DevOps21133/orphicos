@@ -164,8 +164,14 @@ def run_command(
 
         timings["actions_executed"] = executed  # the win metric: actions per round trip
         done = bool(decision.get("done")) and not stopped and last_failure is None
-        on_event({"step": step, "reasoning": summary, "used_vision": screenshot is not None,
-                  "actions": results, "done": done, "timings": timings})
+        event = {"step": step, "reasoning": summary, "used_vision": screenshot is not None,
+                 "actions": results, "done": done, "timings": timings}
+        if decision.get("locked_skill"):
+            # The brain answered with a skill-store upsell instead of doing the task
+            # (the actions open that skill's checkout page); the shell renders this
+            # step distinctly.
+            event["locked_skill"] = str(decision["locked_skill"])
+        on_event(event)
         # History entries must carry enough evidence for the brain to know the work
         # already happened (typed text is not always readable back from the tree):
         # keep the value (truncated) and the per-action result, not just the verb.

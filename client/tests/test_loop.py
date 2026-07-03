@@ -51,6 +51,22 @@ class ControlFlowTests(unittest.TestCase):
         self.assertEqual(t["server_ms"], 1000)
         self.assertEqual(t["net_ms"], max(t["decide_ms"] - 1000, 0))
 
+    def test_locked_skill_reaches_the_step_event(self):
+        # A skill-store upsell decision: the shell needs locked_skill on the event
+        # to render the step distinctly; plain decisions must NOT carry the key.
+        desktop = FakeDesktop(node_names=["Save"], active_window="Desktop")
+        upsell = _decision([WAIT0], done=True, summary="skill offer")
+        upsell["locked_skill"] = "gmail"
+        brain = FakeBrain([upsell])
+        events = []
+        self._run(desktop, brain, on_event=events.append)
+        self.assertEqual(events[0]["locked_skill"], "gmail")
+
+        brain = FakeBrain([_decision([WAIT0], done=True)])
+        events = []
+        self._run(desktop, brain, on_event=events.append)
+        self.assertNotIn("locked_skill", events[0])
+
     def test_multi_step_until_done(self):
         desktop = FakeDesktop(node_names=["Save"], active_window="Book1 - Excel")
         brain = FakeBrain([

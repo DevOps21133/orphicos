@@ -363,6 +363,22 @@ class ClipboardAndPathTests(unittest.TestCase):
         with self.assertRaises(ActionError):
             self.actor.execute({"type": "open_path", "value": None})
 
+    def test_open_path_opens_https_url_in_browser(self):
+        # The server's skill-checkout upsell rides on this: an http(s) URL opens
+        # in the default browser without any filesystem existence check.
+        url = "https://orphicos.app/skills/gmail"
+        with patch("client.act.actor.os.startfile") as start:
+            result = self.actor.execute({"type": "open_path", "value": url})
+        start.assert_called_once_with(url)
+        self.assertIn("browser", result)
+
+    def test_open_path_refuses_non_http_url_schemes(self):
+        for url in ("file:///C:/Windows", "ftp://host/x", "ms-settings://display"):
+            with patch("client.act.actor.os.startfile") as start:
+                with self.assertRaises(ActionError):
+                    self.actor.execute({"type": "open_path", "value": url})
+            start.assert_not_called()
+
 
 class LongTextPasteTests(unittest.TestCase):
     LONG = "x" * 250  # over the clipboard threshold

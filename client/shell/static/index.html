@@ -90,6 +90,7 @@
   .tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
   .tag.vision { color: var(--warn); border-color: rgba(255,180,84,0.4); }
   .tag.done { color: var(--good); border-color: rgba(55,214,122,0.4); }
+  .tag.skill { color: var(--accent); border-color: rgba(124,156,255,0.45); }
   .reason { color: var(--text); margin: 2px 0 10px; }
   .actions { display: flex; flex-direction: column; gap: 6px; }
   .act { display: flex; gap: 10px; align-items: baseline; font-size: 13.5px; }
@@ -238,6 +239,9 @@
     head.appendChild(num);
     if (ev.used_vision) {
       const t = document.createElement("span"); t.className = "tag vision"; t.textContent = "vision fallback"; head.appendChild(t);
+    }
+    if (ev.locked_skill) {
+      const t = document.createElement("span"); t.className = "tag skill"; t.textContent = ev.locked_skill + " skill available"; head.appendChild(t);
     }
     if (ev.done) {
       const t = document.createElement("span"); t.className = "tag done"; t.textContent = "done"; head.appendChild(t);
