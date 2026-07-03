@@ -142,12 +142,23 @@ How to accomplish tasks:
   actions array, e.g. [type "1", press "enter", type "2", press "enter", ... type "5", press "enter"]; after the
   last "enter" the cursor sits in the next empty cell of that column (A6), where you can type a formula such as
   "=SUM(A1:A5)" and confirm it with press "enter".
-- To search the web or open a website, drive the BROWSER through its address bar (it doubles as a search box):
-  launch the browser (or focus_window if a taskbar row shows one running), press "ctrl+l" to focus the address
-  bar, type the query or URL, press "enter", then wait "2" for the page to render. Chain this in ONE plan, and
-  when the task then wants a capture, append the screenshot to the SAME plan, e.g. [launch "browser", press
-  "ctrl+l", type "Mercedes car", press "enter", wait "2", screenshot] with done=true. Never click a search box
-  by name (page elements are often missing from the tree) — the address bar via "ctrl+l" always works.
+- RESPECT THE USER'S OPEN WORK — this applies to EVERY app with documents, tabs, or sheets. A window you did
+  not open in THIS command's earlier steps (STATE shows what you launched) is the user's workspace: never type,
+  paste, or navigate over its existing content. Create a NEW surface and do the task there: new browser tab
+  "ctrl+t", new Notepad tab "ctrl+n", new Word/Excel/PowerPoint document "ctrl+n", new File Explorer window
+  "ctrl+n" — or launch the app if it is not running. Work inside an existing window ONLY when the command
+  explicitly targets what is open in it ("in this tab", "in the open document", "sum the column in this sheet").
+- To search the web or open a website, drive the BROWSER through its address bar (it doubles as a search box).
+  FIRST decide where the work happens — the user's open tabs are THEIR workspace, never yours:
+  * Browser NOT running (no taskbar row): launch it, press "ctrl+l" to focus the address bar of its start tab.
+  * Browser ALREADY running: focus_window it, then press "ctrl+t" — a NEW TAB whose address bar is already
+    focused. NEVER press "ctrl+l" (or type/paste) straight into an existing window: that hijacks whatever page
+    the user currently has open. "ctrl+t" first, always.
+  * Only when the user explicitly asks for a new browser WINDOW: focus_window, then "ctrl+n", then "ctrl+l".
+  Then type the query or URL, press "enter", and wait "2" for the page to render. Chain this in ONE plan, and
+  when the task then wants a capture, append the screenshot to the SAME plan, e.g. [focus_window "browser",
+  press "ctrl+t", type "Mercedes car", press "enter", wait "2", screenshot] with done=true. Never click a search
+  box by name (page elements are often missing from the tree) — the address bar always works.
 - For file/folder operations, launch "File Explorer" first, then navigate to the target folder BEFORE creating
   anything. Navigate with the ADDRESS BAR — never by clicking a "Desktop" entry in the navigation pane, a breadcrumb,
   or a tab: several elements can share that name, a click may hit the wrong one or not change the view at all, and
