@@ -101,11 +101,27 @@ _FRESH_SURFACE = {
     "word": "ctrl+n",
     "excel": "ctrl+n",
     "powerpoint": "ctrl+n",
+    "libreoffice calc": "ctrl+n",
+    "libreoffice writer": "ctrl+n",
+    "libreoffice impress": "ctrl+n",
+    "libreoffice": "ctrl+n",
     "chrome": "ctrl+t",
     "edge": "ctrl+t",
     "firefox": "ctrl+t",
     "brave": "ctrl+t",
     "opera": "ctrl+t",
+}
+
+# The brain names the app the USER said ("Excel"); only the CLIENT knows what is
+# actually installed on THIS machine (the same reason known folders resolve here).
+# When a requested app is not found, fall back to the installed equivalent before
+# aborting. This machine — and the project's office recipe — use LibreOffice; a
+# machine with real Excel launches Excel and never reaches this map. Matched as a
+# whole word, so "word" does not catch "wordpad".
+_APP_ALIASES = {
+    "excel": "LibreOffice Calc",
+    "word": "LibreOffice Writer",
+    "powerpoint": "LibreOffice Impress",
 }
 
 # The engine's launch/switch return a human string, not a status code. These
@@ -237,11 +253,29 @@ class Actor:
             return f"{name} already open — opened a fresh {surface}"
         result = str(self._desktop.app(mode="launch", name=name))
         if _looks_failed(result):
+            # The app the brain named may not exist on THIS machine (it said "Excel";
+            # the box has LibreOffice). Try the installed equivalent before giving up.
+            alias = self._alias_for(name)
+            if alias is not None:
+                alt = str(self._desktop.app(mode="launch", name=alias))
+                if not _looks_failed(alt):
+                    self._ensure_foreground(alias)
+                    return f"{name} not installed — launched {alias} instead"
             # Abort the plan: a launch that never started the app must not let the
-            # following actions run against whatever window currently has focus.
+            # following actions run against whatever window currently has focus
+            # (that is how "type 1..5" ended up feeding the shell's own command bar).
             raise ActionError(f"could not launch {name}: {result}")
         self._ensure_foreground(name)
         return result
+
+    def _alias_for(self, name: str) -> str | None:
+        """The installed-equivalent app to try when `name` was not found — e.g. the
+        machine has LibreOffice, not the Microsoft Office app the brain named."""
+        low = name.lower()
+        for keyword, target in _APP_ALIASES.items():
+            if re.search(rf"\b{re.escape(keyword)}\b", low):
+                return target
+        return None
 
     def _fresh_surface_for(self, name: str) -> str | None:
         """The 'new surface' chord (ctrl+t / ctrl+n) if `name` is a single-instance

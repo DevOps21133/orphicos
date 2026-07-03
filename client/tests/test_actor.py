@@ -208,16 +208,43 @@ class ActionDispatchTests(unittest.TestCase):
         self.assertIn(("app", "launch", "Notepad"), self.desktop.calls)
         self.assertFalse(any(c[0] == "shortcut" for c in self.desktop.calls))
 
-    def test_failed_launch_aborts_the_batch(self):
-        # A launch that can't start the app must RAISE, so the plan's following
-        # type/press never fire into the wrong window (failed "launch Excel" must
-        # not type a formula into whatever is focused — the Calculator bug).
+    def test_failed_launch_falls_back_to_installed_equivalent(self):
+        # This machine has LibreOffice, not Excel: a failed "launch Excel" must retry
+        # the installed equivalent (LibreOffice Calc) instead of aborting — so the
+        # user never needs to know which office suite is installed.
         desktop = FakeDesktop(node_names=[])
-        desktop.app = lambda mode, name=None, loc=None: (  # engine reports failure
+
+        def app(mode, name=None, loc=None):
+            desktop.calls.append(("app", mode, name))
+            return "not found in start menu." if name == "Excel" else f"{name} launched."
+
+        desktop.app = app
+        result = Actor(desktop).execute({"type": "launch", "value": "Excel"})
+        self.assertIn(("app", "launch", "Excel"), desktop.calls)              # tried what was asked
+        self.assertIn(("app", "launch", "LibreOffice Calc"), desktop.calls)   # then the equivalent
+        self.assertIn("LibreOffice Calc", result)
+
+    def test_failed_launch_aborts_when_no_equivalent_launches(self):
+        # If neither the named app nor its equivalent can start, RAISE — so the plan's
+        # following type/press never fire into the wrong window (that is how "type
+        # 1..5" ended up feeding the shell's own command bar).
+        desktop = FakeDesktop(node_names=[])
+        desktop.app = lambda mode, name=None, loc=None: (  # everything is unavailable
             desktop.calls.append(("app", mode, name)) or f"{name} not found in start menu.")
         with self.assertRaises(ActionError) as ctx:
             Actor(desktop).execute({"type": "launch", "value": "Excel"})
         self.assertIn("could not launch", str(ctx.exception))
+        self.assertIn(("app", "launch", "LibreOffice Calc"), desktop.calls)   # tried the equivalent first
+
+    def test_failed_launch_with_no_alias_aborts_immediately(self):
+        # An app with no known equivalent (Calculator) aborts on the first failure.
+        desktop = FakeDesktop(node_names=[])
+        desktop.app = lambda mode, name=None, loc=None: (
+            desktop.calls.append(("app", mode, name)) or f"{name} not found in start menu.")
+        with self.assertRaises(ActionError):
+            Actor(desktop).execute({"type": "launch", "value": "Calculator"})
+        launches = [c for c in desktop.calls if c[0] == "app" and c[1] == "launch"]
+        self.assertEqual(launches, [("app", "launch", "Calculator")])  # no second attempt
 
     def test_failed_focus_window_aborts_the_batch(self):
         # Same abort contract for focus_window: a missing target must not let the
