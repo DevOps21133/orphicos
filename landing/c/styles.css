@@ -1,0 +1,176 @@
+/* Variant C — "Type only".
+   The sentence is the page. Viewport-filling serif, a thin strip of the
+   artwork, the ship as a small mark. Brutalist-simple.
+   Hues sampled from landing/assets/src/hero-banner.png; derived shades mix a
+   sampled hue with black/white only. Spacing: 8px rhythm. 2 fonts. Zero JS. */
+
+:root {
+  --ink: #282c31;      /* sampled: wave shadow (1700,400) */
+  --ink-2: #31353a;    /* --ink + white ~6% — hairlines */
+  --mid: #6b6b6e;      /* sampled: storm grey (150,100) */
+  --grey: #81807e;     /* sampled: sky grey (950,100) */
+  --light: #afaeae;    /* sampled: cloud grey (1500,60) */
+  --sail: #b1a397;     /* sampled: sail bone (750,250) */
+  --bone: #bab6a7;     /* sampled: calm water (1150,460) */
+  --ivory: #d3d0c5;    /* --bone + white ~35% — display type */
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--ink);
+  color: var(--light);
+  font-family: "Segoe UI", -apple-system, "Helvetica Neue", Arial, sans-serif;
+  font-size: 1.0625rem; /* 17px body */
+  line-height: 1.7;
+  overflow-x: hidden;
+}
+
+h1, h2, .wordmark, .data-line {
+  font-family: "Iowan Old Style", Georgia, "Times New Roman", serif;
+  color: var(--ivory);
+}
+
+/* ---- hero: the sentence fills the viewport ---- */
+
+.hero {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 48px 24px;
+}
+
+.wordmark {
+  font-size: 1.25rem;
+  letter-spacing: 0.04em;
+  margin-bottom: 48px;
+}
+
+h1 {
+  font-size: clamp(3.5rem, 11vw, 9rem);
+  font-weight: 500;
+  line-height: 1.0;
+  letter-spacing: -0.03em;
+}
+
+h1 em { font-style: italic; color: var(--sail); }
+
+.lede {
+  margin-top: 48px;
+  font-size: 1.625rem;   /* >=1.5x body */
+  color: var(--grey);
+}
+
+/* ---- the artwork, reduced to a seam ---- */
+
+.strip {
+  height: 48px;
+  background-image: url("../assets/wave-strip.jpg");
+  background-image: image-set(url("../assets/wave-strip.webp") type("image/webp"),
+                              url("../assets/wave-strip.jpg") type("image/jpeg"));
+  background-size: cover;
+  background-position: center;
+}
+
+/* ---- sections ---- */
+
+section:not(.hero) {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 120px 24px;
+}
+
+section:not(.hero) + section { border-top: 1px solid var(--ink-2); }
+
+.what p { font-size: 1.625rem; line-height: 1.6; color: var(--light); }
+
+/* ---- steps ---- */
+
+.steps { list-style: none; }
+
+.steps li { padding: 32px 0; }
+
+.steps li + li { border-top: 1px solid var(--ink-2); }
+
+.steps h2 {
+  display: inline;
+  font-size: 2.5rem;      /* ~1.54x .what/.lede level */
+  font-weight: 500;
+  margin-right: 16px;
+}
+
+.steps p { display: inline; color: var(--grey); }
+
+/* ---- privacy ---- */
+
+.data-line { font-size: 1.625rem; line-height: 1.5; }
+
+.data-note { margin-top: 16px; color: var(--grey); font-size: 0.9375rem; }
+
+/* ---- download ---- */
+
+.download { text-align: center; }
+
+.mark { display: block; margin: 0 auto 40px; width: 140px; }
+
+.mark img {
+  display: block;
+  width: 100%; height: auto;
+  border: 1px solid var(--ink-2);
+}
+
+.early {
+  color: var(--sail);
+  font-size: 0.875rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin-bottom: 24px;
+}
+
+.button {
+  display: inline-block;
+  padding: 16px 48px;
+  background: var(--ivory);
+  color: var(--ink);
+  border: 1px solid var(--ivory);
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 0.2s ease, color 0.2s ease; /* the one accent interaction */
+}
+
+.button:hover, .button:focus-visible { background: transparent; color: var(--ivory); }
+
+.requirements { margin-top: 24px; color: var(--light); font-size: 0.9375rem; }
+
+.smartscreen {
+  margin: 16px auto 0;
+  max-width: 30rem;
+  color: var(--grey);
+  font-size: 0.875rem;
+}
+
+/* ---- footer ---- */
+
+footer {
+  border-top: 1px solid var(--ink-2);
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--mid);
+  font-size: 0.875rem;
+}
+
+footer a { color: var(--grey); }
+footer a:hover { color: var(--bone); }
+
+/* ---- mobile ---- */
+
+@media (max-width: 44rem) {
+  .lede, .what p, .data-line { font-size: 1.375rem; }
+  section:not(.hero) { padding: 72px 24px; }
+  .steps h2 { font-size: 2rem; }
+}
