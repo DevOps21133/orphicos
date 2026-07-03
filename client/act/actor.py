@@ -11,6 +11,8 @@ for that element's live centre coordinates.
 """
 from __future__ import annotations
 
+from datetime import datetime
+from pathlib import Path
 from time import monotonic, sleep
 
 from client._engine import Desktop, escape_text_for_sendkeys, uia
@@ -173,6 +175,25 @@ class Actor:
         stype = "horizontal" if direction in ("left", "right") else "vertical"
         self._desktop.scroll(loc=loc, type=stype, direction=direction, wheel_times=3)
         return f"scrolled {direction}"
+
+    def _do_screenshot(self, action: dict, value) -> str:
+        """Capture the screen and save it ON THIS MACHINE (the user's own PC).
+
+        The image never travels to the server — this is a local deliverable the
+        user asked for, unlike the Rule 5 vision fallback in client/perceive.
+        `value` may name an absolute .png path; default is Pictures\\Screenshots.
+        """
+        png = self._desktop.get_screenshot(as_bytes=True)
+        stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        if value:
+            path = Path(str(value)).expanduser()
+            if path.suffix.lower() != ".png":  # a folder was given -> name the file inside it
+                path = path / f"orphic_screenshot_{stamp}.png"
+        else:
+            path = Path.home() / "Pictures" / "Screenshots" / f"orphic_screenshot_{stamp}.png"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(png)
+        return f"screenshot saved to {path}"
 
     def _do_wait(self, action: dict, value) -> str:
         try:

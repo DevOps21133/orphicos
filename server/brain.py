@@ -26,7 +26,7 @@ from openai import BadRequestError, OpenAI
 # Action verbs the thin client (Windows-Use, Phase 2) knows how to execute.
 ALLOWED_ACTIONS = (
     "launch", "click", "double_click", "right_click",
-    "type", "press", "scroll", "focus_window", "wait",
+    "type", "press", "scroll", "focus_window", "wait", "screenshot",
 )
 
 _SYSTEM_PROMPT = """You are the OrphicOS engine: the decision cortex that drives a Windows 11 desktop.
@@ -45,11 +45,16 @@ Return ONLY a JSON object (no prose, no markdown) with this exact shape:
 }
 
 Rules:
-- Allowed "type" verbs: launch, click, double_click, right_click, type, press, scroll, focus_window, wait.
+- Allowed "type" verbs: launch, click, double_click, right_click, type, press, scroll, focus_window, wait, screenshot.
 - PREFER acting on named tree elements: put the element's Name in "target_selector" and leave "coords" null.
 - Use "coords" ONLY when a screenshot is provided and no named element fits (canvas/custom-drawn UI).
 - "value" holds: the app name for launch; the text for type; the key chord for press (e.g. "ctrl+s", "enter");
-  the direction for scroll ("up"/"down"); or the number of seconds for wait.
+  the direction for scroll ("up"/"down"); the number of seconds for wait; or, for screenshot, the absolute save
+  path (null saves to the user's Pictures\\Screenshots folder).
+- When the COMMAND asks to capture/screenshot the screen, emit a single {"type":"screenshot"} action — the
+  client captures and saves the image on the user's own machine. NEVER drive Snipping Tool or press
+  "printscreen" for this. If a specific app should be in the shot, focus_window/launch it FIRST in the same
+  plan, then screenshot. This usually completes the request: set done=true alongside it.
 - BATCH AGGRESSIVELY: "actions" is an ORDERED PLAN the client executes in sequence WITHOUT consulting you between
   steps. Every extra call to you costs ~10 seconds, so chain as MANY actions as you can confidently predict from
   THIS screen: launch an app and immediately type into it (a launch guarantees the app owns the foreground before

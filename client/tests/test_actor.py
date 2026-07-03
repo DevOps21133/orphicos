@@ -15,7 +15,7 @@ from client.tests.fakes import FakeDesktop
 # Kept explicit here so a drift between server verbs and client handlers fails a test.
 EXPECTED_VERBS = (
     "launch", "click", "double_click", "right_click",
-    "type", "press", "scroll", "focus_window", "wait",
+    "type", "press", "scroll", "focus_window", "wait", "screenshot",
 )
 
 
@@ -176,6 +176,41 @@ class ActionDispatchTests(unittest.TestCase):
     def test_focus_window_switches(self):
         self.actor.execute({"type": "focus_window", "value": "Book1 - Excel"})
         self.assertIn(("app", "switch", "Book1 - Excel"), self.desktop.calls)
+
+
+class ScreenshotTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.desktop = FakeDesktop(node_names=[], screenshot=b"\x89PNG-fake")
+        self.actor = Actor(self.desktop)
+
+    def test_screenshot_saves_png_to_given_path(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as td:
+            target = Path(td) / "shot.png"
+            result = self.actor.execute({"type": "screenshot", "value": str(target)})
+            self.assertTrue(target.exists())
+            self.assertEqual(target.read_bytes(), b"\x89PNG-fake")
+            self.assertIn(str(target), result)
+
+    def test_screenshot_directory_value_gets_named_file_inside(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as td:
+            self.actor.execute({"type": "screenshot", "value": td})
+            files = list(Path(td).glob("orphic_screenshot_*.png"))
+            self.assertEqual(len(files), 1)
+
+    def test_screenshot_default_path_is_pictures_screenshots(self):
+        # Patch home so the default path never touches the real user profile.
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as td:
+            with patch("client.act.actor.Path.home", return_value=Path(td)):
+                result = self.actor.execute({"type": "screenshot", "value": None})
+            files = list((Path(td) / "Pictures" / "Screenshots").glob("orphic_screenshot_*.png"))
+            self.assertEqual(len(files), 1)
+            self.assertIn("Screenshots", result)
 
 
 class ScrollAndWaitTests(unittest.TestCase):
