@@ -1,0 +1,4 @@
+# Build-time only (Phase 6 packaging) — never shipped to users.
+# PyInstaller is GPL-2.0 WITH the Bootloader Exception (closed-source commercial
+# distribution explicitly permitted) — see THIRD-PARTY-NOTICES.txt.
+pyinstaller==6.21.0

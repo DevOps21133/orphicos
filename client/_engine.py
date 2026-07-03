@@ -35,6 +35,38 @@ if "windows_use" not in sys.modules:
     _stub.__doc__ = "OrphicOS wall stub: windows-use's LLM Agent is intentionally not loaded."
     sys.modules["windows_use.agent.service"] = _stub
 
+# License wall (Rule 9): windows-use's Desktop imports `fuzzywuzzy.process` (GPLv2, and it
+# drags in Levenshtein, GPL-2.0) solely for extractOne() in window-title matching. Neither
+# GPL package may ship in the client, so we pre-register our own permissive replacement
+# built on stdlib difflib. Same idea as WRatio for this use: pick the closest title, or
+# None below the cutoff.
+if "fuzzywuzzy" not in sys.modules:
+    import difflib
+
+    def _extract_one(query: str, choices, score_cutoff: int = 0, **_ignored):
+        best, best_score = None, -1.0
+        q = query.lower()
+        for choice in choices:
+            c = str(choice).lower()
+            score = difflib.SequenceMatcher(None, q, c).ratio() * 100
+            # A window title usually embeds the app name ("readme - Notepad"): treat a
+            # whole-word containment as a strong match, like fuzzy partial matching does.
+            if q and (q in c or c in q):
+                score = max(score, 90.0)
+            if score > best_score:
+                best, best_score = choice, score
+        if best is None or best_score < score_cutoff:
+            return None
+        return (best, int(best_score))
+
+    _fw = types.ModuleType("fuzzywuzzy")
+    _fw_process = types.ModuleType("fuzzywuzzy.process")
+    _fw_process.extractOne = _extract_one
+    _fw_process.__doc__ = "OrphicOS wall stub: permissive difflib-based match (no GPL fuzzywuzzy)."
+    _fw.process = _fw_process
+    sys.modules["fuzzywuzzy"] = _fw
+    sys.modules["fuzzywuzzy.process"] = _fw_process
+
 # Safe now: these load only the headless UIA perception/action code, no providers.
 from windows_use import uia  # noqa: E402
 from windows_use.agent.desktop.service import Desktop  # noqa: E402
@@ -43,6 +75,7 @@ from windows_use.agent.desktop.utils import escape_text_for_sendkeys  # noqa: E4
 _FORBIDDEN = (
     "openai", "anthropic", "google.generativeai", "groq", "cohere", "mistralai",
     "cerebras", "litellm", "ollama", "langchain", "posthog",
+    "Levenshtein",  # GPL-2.0; only fuzzywuzzy (also GPL, stubbed above) would pull it in
 )
 
 

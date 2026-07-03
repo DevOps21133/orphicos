@@ -23,3 +23,8 @@ venv/
 # Model weights / caches / engine logs
 /models
 engine/*/logs
+
+# PyInstaller output
+/build/
+/dist/
+*.manifest

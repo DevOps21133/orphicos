@@ -10,11 +10,25 @@ There is intentionally no provider name, model id, or API key anywhere here.
 from __future__ import annotations
 
 import os
+import sys
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-_CONFIG_PATH = Path(__file__).with_name("config.toml")
+
+def _config_path() -> Path:
+    """Where the client config lives.
+
+    Frozen (installed) build: a per-user file the installer/first-run creates —
+    %APPDATA%\\OrphicOS\\config.toml — because the install dir is not writable.
+    Dev checkout: client/config.toml next to this file, as before.
+    """
+    if getattr(sys, "frozen", False):
+        return Path(os.environ["APPDATA"]) / "OrphicOS" / "config.toml"
+    return Path(__file__).with_name("config.toml")
+
+
+_CONFIG_PATH = _config_path()
 _EXAMPLE_PATH = Path(__file__).with_name("config.example.toml")
 
 
@@ -41,11 +55,13 @@ def load_config() -> Config:
     if not server_base:
         raise ValueError(f"SERVER_BASE is not set in {_CONFIG_PATH.name}.")
 
-    token = os.environ.get("ORPHIC_TOKEN", "").strip()
+    # Installed builds keep the token in the per-user config file (written at sign-in);
+    # the ORPHIC_TOKEN env var still wins so dev sessions keep working unchanged.
+    token = os.environ.get("ORPHIC_TOKEN", "").strip() or str(data.get("TOKEN", "")).strip()
     if not token:
         raise ValueError(
-            "ORPHIC_TOKEN is not set. Export the per-user OrphicOS token issued by "
-            "the brain (`python -m server.auth issue <user>`) before starting the client."
+            "No OrphicOS token. Set TOKEN in the config file (installed builds) or export "
+            "ORPHIC_TOKEN (dev; issued via `python -m server.auth issue <user>`)."
         )
 
     return Config(

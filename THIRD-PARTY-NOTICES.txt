@@ -69,9 +69,14 @@ Also present but unused (remove before ship to shrink and de-risk the client):
   Messaging channels: discord.py, slack_sdk, slack_bolt, neonize, pysignalclirestapi.
   Heavy tooling: datasets, pandas, pyarrow, jupyter/ipython, twine, keyring.
 
-Ship-time plan (Phase 6): replace windows-use with a minimal vendored subset
-(uia + agent/desktop + agent/tree only, all MIT) so the client depends on NONE of the
-above. Tracked as release-blocking cleanup.
+Ship-time RESOLUTION (Phase 6, 2026-07-03): instead of vendoring, the wall is enforced
+at package time. packaging/orphicos.spec EXCLUDES every provider SDK, telemetry client,
+agent-stack package, and the GPL trio from the frozen client; packaging/verify_dist.py
+scans the built app (files AND the embedded module archive) and fails the build if any
+forbidden name shipped. The fuzzywuzzy/Levenshtein GPL runtime dependency was removed by
+replacing it with an original difflib-based (Python stdlib, PSF) matcher registered in
+client/_engine.py — no GPL code ships and none loads. The dev .venv still contains the
+transitive tree; only dist/ is shipped, and dist/ is verified clean on every build.
 
 Genuinely used by the client at runtime (all permissive):
   windows-use 0.8.1 MIT · pywin32 312 (PSF/BSD-style) · comtypes 1.4.16 MIT ·
@@ -152,6 +157,26 @@ forbidden AGPL/SSPL/BSL set — flagged for review:
   here. Standard, low IP risk for a hosted closed-source backend. Both are
   effectively unavoidable with the Python HTTPS/LLM stack (certifi underlies all
   Python TLS; tqdm is a required openai dependency). See docs/runbook.md.
+
+--------------------------------------------------------------------------------
+Packaging toolchain   (build-time; Phase 6)
+--------------------------------------------------------------------------------
+Used to BUILD the Windows client package. Except for PyInstaller's bootloader (see
+note), none of these ship to users.
+
+  PyInstaller               6.21.0  GPL-2.0 WITH the PyInstaller Bootloader Exception
+      Source: https://github.com/pyinstaller/pyinstaller
+      The exception explicitly permits building and distributing closed-source
+      commercial applications; the only GPL-origin bytes in the shipped app are the
+      bootloader stub embedded in OrphicOS.exe, which the exception covers. Recorded
+      as a deliberate, license-compliant deviation from the strict allowlist (Rule 9),
+      per the build spec's §10.1 tool choice.
+  pyinstaller-hooks-contrib 2026.6  Apache-2.0 (dual GPL-2.0/Apache-2.0; Apache elected)
+  altgraph                  0.17.5  MIT
+  pefile                    2024.8.26  MIT
+  Inno Setup                6.x     Inno Setup License (permissive, free for commercial
+      use; the installer runtime it embeds is covered by the same license).
+      Source: https://jrsoftware.org/isinfo.php
 
 --------------------------------------------------------------------------------
 Local STT model / tooling   (client — speech-to-text; Phase 3)      [PLACEHOLDER]
