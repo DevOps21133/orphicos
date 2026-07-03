@@ -120,10 +120,36 @@ class ControlFlowTests(unittest.TestCase):
 
     def test_max_steps_reached(self):
         desktop = FakeDesktop(node_names=["Save"], active_window="Loop")
-        brain = FakeBrain([_decision([WAIT0], done=False)])  # never done -> repeats
+        # Clicks (not waits — those get waived) that never reach done -> budget runs out.
+        brain = FakeBrain([_decision([{"type": "click", "target_selector": "Save"}],
+                                     done=False)])
         outcome = self._run(desktop, brain, max_steps=3)
         self.assertEqual(outcome, "max_steps")
         self.assertEqual(len(brain.seen), 3)
+
+    def test_pure_wait_steps_do_not_consume_step_budget(self):
+        # Three pure-wait steps are waived, so the closing click still fits in a
+        # 1-step budget — waiting out a slow operation can't starve the run.
+        desktop = FakeDesktop(node_names=["Save"], active_window="App")
+        brain = FakeBrain([
+            _decision([WAIT0], done=False),
+            _decision([WAIT0], done=False),
+            _decision([WAIT0], done=False),
+            _decision([{"type": "click", "target_selector": "Save"}], done=True),
+        ])
+        outcome = self._run(desktop, brain, max_steps=1)
+        self.assertEqual(outcome, "done")
+        self.assertEqual(len(brain.seen), 4)
+
+    def test_wait_waivers_are_limited(self):
+        # A brain stuck emitting waits forever must still terminate: only the
+        # first _WAIT_WAIVERS pure-wait steps are free.
+        from client.loop import _WAIT_WAIVERS
+        desktop = FakeDesktop(node_names=["Save"], active_window="App")
+        brain = FakeBrain([_decision([WAIT0], done=False)])  # waits forever
+        outcome = self._run(desktop, brain, max_steps=2)
+        self.assertEqual(outcome, "max_steps")
+        self.assertEqual(len(brain.seen), _WAIT_WAIVERS + 2)
 
     def test_action_error_triggers_single_replan_with_failure_state(self):
         # A target that resolves to nothing must FAIL the action, abort the rest of the

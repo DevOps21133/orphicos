@@ -15,7 +15,8 @@ from client.tests.fakes import FakeDesktop
 # Kept explicit here so a drift between server verbs and client handlers fails a test.
 EXPECTED_VERBS = (
     "launch", "click", "double_click", "right_click",
-    "type", "press", "scroll", "focus_window", "wait", "screenshot",
+    "type", "press", "scroll", "focus_window", "wait", "wait_for",
+    "set_clipboard", "open_path", "screenshot",
 )
 
 
@@ -257,6 +258,158 @@ class ScrollAndWaitTests(unittest.TestCase):
 
     def test_wait_non_numeric_defaults_to_one(self):
         self.assertEqual(self.actor.execute({"type": "wait", "value": "soon"}), "waited 1s")
+
+
+class WaitForTests(unittest.TestCase):
+    def setUp(self) -> None:
+        import client.act.actor as actor_module
+        self._mod = actor_module
+        # Fast polling for tests; sleep is real but 0-length via the poll constant.
+        self._patches = [
+            patch.object(actor_module, "_WAIT_FOR_TIMEOUT", 0.2),
+            patch.object(actor_module, "_WAIT_FOR_POLL", 0.01),
+        ]
+        for p in self._patches:
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_returns_when_element_already_present(self):
+        actor = Actor(FakeDesktop(node_names=["Download complete"]))
+        result = actor.execute({"type": "wait_for", "value": "Download complete"})
+        self.assertIn("appeared", result)
+
+    def test_matches_active_window_title(self):
+        actor = Actor(FakeDesktop(node_names=[], active_window="Setup - Finished"))
+        result = actor.execute({"type": "wait_for", "value": "Finished"})
+        self.assertIn("appeared", result)
+
+    def test_returns_when_element_appears_later(self):
+        desktop = FakeDesktop(node_names=[])
+        polls = {"n": 0}
+        real_get_state = desktop.get_state
+
+        def appearing_get_state():
+            polls["n"] += 1
+            if polls["n"] == 3:
+                desktop.set_nodes(["Install finished"])
+            return real_get_state()
+
+        desktop.get_state = appearing_get_state
+        result = Actor(desktop).execute({"type": "wait_for", "value": "Install finished"})
+        self.assertIn("appeared", result)
+
+    def test_gone_prefix_waits_for_disappearance(self):
+        actor = Actor(FakeDesktop(node_names=["Save"]))  # "Installing" is not present
+        result = actor.execute({"type": "wait_for", "value": "gone:Installing"})
+        self.assertIn("disappeared", result)
+
+    def test_timeout_raises_actionerror_for_replan(self):
+        actor = Actor(FakeDesktop(node_names=[]))
+        with self.assertRaises(ActionError) as ctx:
+            actor.execute({"type": "wait_for", "value": "Never appears"})
+        self.assertIn("timed out", str(ctx.exception))
+
+    def test_kill_switch_breaks_the_poll(self):
+        actor = Actor(FakeDesktop(node_names=[]), should_stop=lambda: True)
+        result = actor.execute({"type": "wait_for", "value": "Never appears"})
+        self.assertIn("interrupted", result)
+
+    def test_missing_name_raises(self):
+        actor = Actor(FakeDesktop(node_names=[]))
+        with self.assertRaises(ActionError):
+            actor.execute({"type": "wait_for", "value": "gone:"})
+
+
+class ClipboardAndPathTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.desktop = FakeDesktop(node_names=["Text editor"])
+        self.actor = Actor(self.desktop)
+
+    def test_set_clipboard_writes_text(self):
+        with patch("client.act.actor.uia.SetClipboardText", return_value=True) as put:
+            result = self.actor.execute({"type": "set_clipboard", "value": "hello"})
+        put.assert_called_once_with("hello")
+        self.assertEqual(result, "clipboard set (5 chars)")
+
+    def test_set_clipboard_failure_raises(self):
+        with patch("client.act.actor.uia.SetClipboardText", return_value=False):
+            with self.assertRaises(ActionError):
+                self.actor.execute({"type": "set_clipboard", "value": "hello"})
+
+    def test_set_clipboard_without_value_raises(self):
+        with self.assertRaises(ActionError):
+            self.actor.execute({"type": "set_clipboard", "value": None})
+
+    def test_open_path_starts_default_handler(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as td:
+            target = Path(td) / "report.txt"
+            target.write_text("x")
+            with patch("client.act.actor.os.startfile") as start:
+                result = self.actor.execute({"type": "open_path", "value": str(target)})
+            start.assert_called_once_with(str(target))
+            self.assertIn("report.txt", result)
+
+    def test_open_path_missing_raises_without_launching(self):
+        with patch("client.act.actor.os.startfile") as start:
+            with self.assertRaises(ActionError) as ctx:
+                self.actor.execute({"type": "open_path",
+                                    "value": r"C:\definitely\not\here.xyz"})
+        start.assert_not_called()
+        self.assertIn("does not exist", str(ctx.exception))
+
+    def test_open_path_without_value_raises(self):
+        with self.assertRaises(ActionError):
+            self.actor.execute({"type": "open_path", "value": None})
+
+
+class LongTextPasteTests(unittest.TestCase):
+    LONG = "x" * 250  # over the clipboard threshold
+
+    def setUp(self) -> None:
+        self.desktop = FakeDesktop(node_names=["Text editor"])
+        self.actor = Actor(self.desktop)
+
+    def test_long_targeted_type_pastes_via_clipboard(self):
+        with patch("client.act.actor.uia.SetClipboardText", return_value=True) as put:
+            result = self.actor.execute({"type": "type", "target_selector": "Text editor",
+                                         "value": self.LONG})
+        put.assert_called_once_with(self.LONG)
+        # Click focuses the target, then ctrl+v delivers the text — no char typing.
+        self.assertIn(("click", (100, 200), "left", 1), self.desktop.calls)
+        self.assertIn(("shortcut", "ctrl+v"), self.desktop.calls)
+        self.assertFalse(any(c[0] == "type" for c in self.desktop.calls))
+        self.assertIn("pasted 250 chars", result)
+
+    def test_long_untargeted_type_pastes_into_focus(self):
+        with patch("client.act.actor.uia.SetClipboardText", return_value=True), \
+                patch("client.act.actor.foreground_console_label", return_value=None):
+            result = self.actor.execute({"type": "type", "value": self.LONG})
+        self.assertIn(("shortcut", "ctrl+v"), self.desktop.calls)
+        self.assertIn("pasted 250 chars", result)
+
+    def test_long_untargeted_paste_refused_when_console_focused(self):
+        with patch("client.act.actor.uia.SetClipboardText", return_value=True), \
+                patch("client.act.actor.foreground_console_label",
+                      return_value="ConsoleWindowClass"):
+            with self.assertRaises(ActionError):
+                self.actor.execute({"type": "type", "value": self.LONG})
+        self.assertNotIn(("shortcut", "ctrl+v"), self.desktop.calls)
+
+    def test_clipboard_failure_falls_back_to_typing(self):
+        with patch("client.act.actor.uia.SetClipboardText", return_value=False):
+            result = self.actor.execute({"type": "type", "target_selector": "Text editor",
+                                         "value": self.LONG})
+        self.assertIn(("type", (100, 200), self.LONG), self.desktop.calls)
+        self.assertIn("typed into", result)
+
+    def test_short_text_still_typed_directly(self):
+        with patch("client.act.actor.uia.SetClipboardText") as put:
+            self.actor.execute({"type": "type", "target_selector": "Text editor",
+                                "value": "short"})
+        put.assert_not_called()
+        self.assertIn(("type", (100, 200), "short"), self.desktop.calls)
 
 
 if __name__ == "__main__":

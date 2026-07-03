@@ -11,12 +11,18 @@ for that element's live centre coordinates.
 """
 from __future__ import annotations
 
+import os
 from datetime import datetime
 from pathlib import Path
 from time import monotonic, sleep
+from typing import Callable
 
 from client._engine import Desktop, escape_text_for_sendkeys, uia
 from client.act._focus_guard import foreground_console_label
+
+_WAIT_FOR_TIMEOUT = 120.0  # ceiling for wait_for polling (installs, big copies)
+_WAIT_FOR_POLL = 0.5
+_CLIPBOARD_TYPE_THRESHOLD = 200  # chars; longer text is pasted, not typed key-by-key
 
 
 class ActionError(RuntimeError):
@@ -34,8 +40,12 @@ def _refuse_if_console(what: str) -> None:
 
 
 class Actor:
-    def __init__(self, desktop: Desktop) -> None:
+    def __init__(self, desktop: Desktop,
+                 should_stop: Callable[[], bool] | None = None) -> None:
         self._desktop = desktop
+        # The kill switch must be able to break a long wait_for poll, not just
+        # the gaps between actions — the loop passes its should_stop through.
+        self._should_stop = should_stop
 
     def execute(self, action: dict) -> str:
         """Run one action; return a short human-readable result for the live log."""
@@ -167,6 +177,9 @@ class Actor:
     def _do_type(self, action: dict, value) -> str:
         text = "" if value is None else str(value)
         loc = self._resolve_loc(action)
+        if len(text) > _CLIPBOARD_TYPE_THRESHOLD and self._paste(loc, text):
+            return (f"pasted {len(text)} chars into {loc}" if loc is not None
+                    else f"pasted {len(text)} chars into focused control")
         if loc is not None:
             self._desktop.type(loc, text=text)
             return f"typed into {loc}"
@@ -174,6 +187,22 @@ class Actor:
         _refuse_if_console("typed text")
         uia.SendKeys(escape_text_for_sendkeys(text), interval=0.01, waitTime=0.05)
         return "typed into focused control"
+
+    def _paste(self, loc: tuple[int, int] | None, text: str) -> bool:
+        """Deliver long text via clipboard+ctrl+v — key-by-key typing is slow and
+        drops characters in laggy apps. Returns False when the clipboard write
+        fails, so _do_type falls back to keystrokes."""
+        if loc is None:
+            _refuse_if_console("pasted text")  # same rule as typing into focus
+        try:
+            if not uia.SetClipboardText(text):
+                return False
+        except Exception:  # noqa: BLE001 — clipboard may be held by another app
+            return False
+        if loc is not None:
+            self._desktop.click(loc, button="left", clicks=1)  # focus the target
+        self._desktop.shortcut("ctrl+v")
+        return True
 
     def _do_press(self, action: dict, value) -> str:
         if not value:
@@ -224,3 +253,57 @@ class Actor:
         seconds = max(0.0, min(seconds, 10.0))  # cap so the loop stays responsive
         sleep(seconds)
         return f"waited {seconds:g}s"
+
+    def _do_wait_for(self, action: dict, value) -> str:
+        """Poll until an element/window whose name contains `value` appears —
+        or disappears, with a "gone:" prefix. Long operations (installs, big
+        copies, slow pages) need this instead of chained fixed waits. A timeout
+        raises ActionError so the brain re-plans instead of the run hanging."""
+        spec = str(value or action.get("target_selector") or "").strip()
+        want_gone = spec.lower().startswith("gone:")
+        needle = (spec[5:] if want_gone else spec).strip().lower()
+        if not needle:
+            raise ActionError("wait_for needs an element/window name in 'value'"
+                              " (prefix 'gone:' to wait for it to disappear)")
+        deadline = monotonic() + _WAIT_FOR_TIMEOUT
+        while monotonic() < deadline:
+            if self._should_stop is not None and self._should_stop():
+                return f"wait for {spec!r} interrupted by stop"
+            if self._name_present(needle) != want_gone:
+                return f"{needle!r} {'disappeared' if want_gone else 'appeared'}"
+            sleep(_WAIT_FOR_POLL)
+        raise ActionError(f"wait_for {spec!r} timed out after {_WAIT_FOR_TIMEOUT:g}s")
+
+    def _name_present(self, needle: str) -> bool:
+        """Case-insensitive substring match over the fresh snapshot: the active
+        window's title, any listed windows, and the interactive element names."""
+        state = self._desktop.get_state()
+        names = []
+        if state.active_window:
+            names.append(state.active_window.name or "")
+        for w in getattr(state, "windows", None) or []:
+            names.append(getattr(w, "name", "") or "")
+        tree = state.tree_state
+        for node in (tree.interactive_nodes or []) if tree else []:
+            names.append(getattr(node, "name", "") or "")
+        return any(needle in name.lower() for name in names if name)
+
+    def _do_set_clipboard(self, action: dict, value) -> str:
+        if value is None:
+            raise ActionError("set_clipboard needs text in 'value'")
+        text = str(value)
+        if not uia.SetClipboardText(text):
+            raise ActionError("could not write to the clipboard")
+        return f"clipboard set ({len(text)} chars)"
+
+    def _do_open_path(self, action: dict, value) -> str:
+        """Open a file/folder with its default handler — the reliable equivalent
+        of double-clicking it in Explorer, without any click-navigation."""
+        raw = value or action.get("target_selector")
+        if not raw:
+            raise ActionError("open_path needs an absolute file/folder path in 'value'")
+        path = Path(str(raw)).expanduser()
+        if not path.exists():
+            raise ActionError(f"path does not exist: {path}")
+        os.startfile(str(path))
+        return f"opened {path}"

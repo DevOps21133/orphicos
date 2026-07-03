@@ -28,6 +28,8 @@ _SCREEN_CHANGING = frozenset(
 _DECIDE_RETRIES = 2     # a transient brain hiccup (502 / timeout) shouldn't abort a run
 _RETRY_BACKOFF = 1.5    # seconds to wait before retrying the same decide call
 _EMPTY_TOLERANCE = 2    # consecutive empty responses tolerated before we give up
+_PURE_WAIT = frozenset({"wait", "wait_for"})  # steps that only pass time
+_WAIT_WAIVERS = 3       # pure-wait steps that don't consume the max_steps budget
 
 
 def run_command(
@@ -53,13 +55,17 @@ def run_command(
         action and ends the run as "stopped".
     """
     perceiver = Perceiver(desktop)
-    actor = Actor(desktop)
+    actor = Actor(desktop, should_stop=should_stop)  # so the kill switch breaks wait_for polls
     history: list[dict] = []
     consecutive_empty = 0
     last_failure: dict | None = None  # a mid-batch ActionError, reported to the brain once
     force_screenshot = False  # the brain's previous decision set need_screenshot
+    steps_used = 0
+    step = 0  # monotonic step label for events/history (waived steps still count up)
+    wait_waivers = _WAIT_WAIVERS
 
-    for step in range(1, max_steps + 1):
+    while steps_used < max_steps:
+        step += 1
         if should_stop is not None and should_stop():
             return "stopped"
         t_perceive = perf_counter()
@@ -183,6 +189,13 @@ def run_command(
             consecutive_empty += 1
             if consecutive_empty > _EMPTY_TOLERANCE:  # repeatedly nothing proposed -> give up
                 return "no_actions"                   # (a single empty response is tolerated)
+        # A pure-wait step spent time, not budget: waive a few so waiting out a
+        # long operation (install, download) can't eat the whole run, while a
+        # brain stuck emitting waits forever still terminates.
+        if actions and all(a.get("type") in _PURE_WAIT for a in actions) and wait_waivers > 0:
+            wait_waivers -= 1
+        else:
+            steps_used += 1
         sleep(_SETTLE_SECONDS)
 
     return "max_steps"
