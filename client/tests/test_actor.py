@@ -205,10 +205,28 @@ class ActionDispatchTests(unittest.TestCase):
         self.assertFalse(any(c[0] == "app" and c[1] == "launch" for c in desktop.calls))
 
     def test_launch_when_app_not_open_launches_normally(self):
-        # No window of the app is open -> a real launch, even for a fresh-surface app.
-        self.actor.execute({"type": "launch", "value": "Notepad"})
-        self.assertIn(("app", "launch", "Notepad"), self.desktop.calls)
+        # No window of the app is open -> a real launch, no fresh-surface chord. Firefox
+        # is a _FRESH_SURFACE app (ctrl+t) but only gets the chord when ALREADY open, and
+        # it is not a session-restore editor, so a cold launch fires no shortcut.
+        self.actor.execute({"type": "launch", "value": "Firefox"})
+        self.assertIn(("app", "launch", "Firefox"), self.desktop.calls)
         self.assertFalse(any(c[0] == "shortcut" for c in self.desktop.calls))
+
+    def test_launch_of_session_restore_editor_opens_fresh_tab_even_when_not_open(self):
+        # Windows 11 Notepad restores its previous session on a plain launch, so even
+        # when no Notepad window was open at plan time it can come up holding the user's
+        # old saved text — and a newly-typed document then appends below it (the invoice
+        # demo's leftover-note bug). The client guarantees a clean surface: a real launch
+        # THEN a fresh tab (ctrl+n), unconditionally. The brain cannot see this: it plans
+        # before Notepad exists.
+        result = self.actor.execute({"type": "launch", "value": "Notepad"})
+        self.assertIn(("app", "launch", "Notepad"), self.desktop.calls)   # a real launch
+        self.assertIn(("shortcut", "ctrl+n"), self.desktop.calls)         # then a fresh tab
+        self.assertIn("fresh", result)
+        # Order matters: the fresh tab must come AFTER the launch, never before.
+        launch_i = self.desktop.calls.index(("app", "launch", "Notepad"))
+        chord_i = self.desktop.calls.index(("shortcut", "ctrl+n"))
+        self.assertLess(launch_i, chord_i)
 
     def test_failed_launch_falls_back_to_installed_equivalent(self):
         # This machine has LibreOffice, not Excel: a failed "launch Excel" must retry

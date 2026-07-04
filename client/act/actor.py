@@ -119,6 +119,18 @@ _FRESH_SURFACE = {
     "opera": "ctrl+t",
 }
 
+# Some editors silently REOPEN their previous session on a plain launch: Windows 11
+# Notepad restores every prior tab, so a "fresh" launch can come up already holding the
+# user's old text — and typing a new document then appends below it (exactly the bug a
+# leftover saved note caused in the invoice demo). Unlike _FRESH_SURFACE above, this
+# fires even when NO window was open at plan time, because the brain plans BEFORE the
+# app exists and cannot see the restored text. The client unconditionally opens a fresh
+# tab right after launch so a new document always starts on a clean surface. Keyword ->
+# new-surface chord; matched as a whole word against the launched app name.
+_SESSION_RESTORE_EDITORS = {
+    "notepad": "ctrl+n",
+}
+
 # The brain names the app the USER said ("Excel"); only the CLIENT knows what is
 # actually installed on THIS machine (the same reason known folders resolve here).
 # When a requested app is not found, fall back to the installed equivalent before
@@ -267,13 +279,14 @@ class Actor:
                 alt = str(self._desktop.app(mode="launch", name=alias))
                 if not _looks_failed(alt):
                     self._ensure_foreground(alias)
-                    return f"{name} not installed — launched {alias} instead"
+                    note = self._open_fresh_if_restoring(alias)
+                    return f"{name} not installed — launched {alias} instead{note}"
             # Abort the plan: a launch that never started the app must not let the
             # following actions run against whatever window currently has focus
             # (that is how "type 1..5" ended up feeding the shell's own command bar).
             raise ActionError(f"could not launch {name}: {result}")
         self._ensure_foreground(name)
-        return result
+        return result + self._open_fresh_if_restoring(name)
 
     def _alias_for(self, name: str) -> str | None:
         """The installed-equivalent app to try when `name` was not found — e.g. the
@@ -305,6 +318,21 @@ class Actor:
         titles += [getattr(w, "name", "") or "" for w in (getattr(state, "windows", None) or [])]
         pat = re.compile(rf"\b{re.escape(keyword)}\b", re.IGNORECASE)
         return any(pat.search(t) for t in titles if t)
+
+    def _open_fresh_if_restoring(self, launched: str) -> str:
+        """Guarantee a blank editing surface for editors that silently restore their
+        previous session on launch (Windows 11 Notepad brings back old tabs). Opens a
+        fresh tab so a newly-typed document never appends below the user's old text.
+        Deterministic — independent of what the brain planned. Returns a short log
+        note, or "" when the launched app is not a session-restoring editor."""
+        low = launched.lower()
+        chord = next((c for k, c in _SESSION_RESTORE_EDITORS.items()
+                      if re.search(rf"\b{re.escape(k)}\b", low)), None)
+        if chord is None:
+            return ""
+        self._desktop.shortcut(chord)
+        sleep(0.4)  # let the fresh tab become the active surface before the next type
+        return " — opened a fresh tab (clean surface)"
 
     def _ensure_foreground(self, app_name: str, timeout: float = 6.0) -> None:
         """The brain's contract says a launched app IS the foreground window, but the
