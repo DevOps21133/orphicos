@@ -23,7 +23,7 @@ from typing import Any
 
 from openai import BadRequestError, OpenAI
 
-from server import skills
+from server import memory, skills
 
 # Action verbs the thin client (Windows-Use, Phase 2) knows how to execute.
 ALLOWED_ACTIONS = (
@@ -253,8 +253,55 @@ How to accomplish tasks:
 """
 
 
-def _system_prompt(unlocked: frozenset[str]) -> str:
-    """Base prompt + the PAID SKILLS section for this user's entitlements.
+def _memory_block(user_memory: list[dict] | None) -> str:
+    """The MEMORY section: the facts this user chose to save, plus the rules for
+    using and growing them. The rules are ALWAYS present (the user can say "remember
+    …" at any time); the facts list appears only when memory is non-empty.
+
+    This is opt-in, user-owned memory — NOT the transient screen data (Rule 4). It is
+    what lets a loose command ("email my accountant the invoices") resolve without the
+    user re-supplying the destination every time.
+    """
+    lines = ["\nMEMORY — facts THIS user chose to save (not screen data; they can view/erase all of it):"]
+    if user_memory:
+        by_bucket: dict[str, list[dict]] = {}
+        for it in user_memory:
+            by_bucket.setdefault(it.get("bucket", ""), []).append(it)
+        for bucket in memory.BUCKETS:
+            items = by_bucket.get(bucket) or []
+            if not items:
+                continue
+            lines.append(f"{bucket}:")
+            lines.extend(f'  - {it.get("key")} = {it.get("value")}' for it in items)
+    else:
+        lines.append("(nothing saved yet)")
+    lines += [
+        "How to use memory on EVERY command:",
+        "- RESOLVE references against it silently: 'my accountant', 'the usual folder', the user's own",
+        "  shorthand ('the deck') — substitute the stored value and act; do not ask about what you already know.",
+        "- APPLY saved preferences unasked: a stored sign-off, default folder, tone, file format, or default",
+        "  app is the user's standing choice — honour it without being told again.",
+        "- ONE QUESTION, only when essential: if a reference the command truly depends on is NOT in memory and",
+        "  NOT resolvable from the screen, do not guess. Ask exactly one short question — return done=true,",
+        '  "actions": [], and put ONLY that question in reasoning_summary. Never send, delete, pay, or publish',
+        "  on a guess; small reversible steps you may just take.",
+        '- REMEMBER on request: when the COMMAND is an instruction to save a standing fact ("remember my',
+        "  accountant is Sarah <sarah@firm.com>\", \"always sign my emails 'Best, Alex'\", \"call the Q3 pitch",
+        "  'the deck'\", \"from now on save invoices to C:\\Clients\"), do NO desktop actions. Return \"actions\": [],",
+        '  done=true, a one-line confirmation in reasoning_summary, and a top-level "remember" array:',
+        '    "remember": [{"bucket": "people|preferences|vocabulary", "key": "<the user\'s own wording for it>",',
+        '                  "value": "<the resolved detail>"}]',
+        "  Buckets: people = a person's name/email/relationship; preferences = sign-offs, default folders, tone,",
+        "  formats, default apps; vocabulary = the user's shorthand mapped to a real file/target/path. Store the",
+        "  KEY as the phrase the user will say later, so you can match it next time.",
+        "- Never invent or assume facts about the user. You MAY offer in reasoning_summary to remember something",
+        "  useful, but only ever store what the user explicitly asks you to.",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _system_prompt(unlocked: frozenset[str], user_memory: list[dict] | None = None) -> str:
+    """Base prompt + this user's MEMORY + the PAID SKILLS section for their entitlements.
 
     Unlocked packs contribute their full expertise rules; locked packs appear
     ONLY as id + a classify line, so the brain can tag a command as needing them
@@ -285,7 +332,7 @@ def _system_prompt(unlocked: frozenset[str]) -> str:
     ]
     if expertise:
         section.append("\n" + "\n\n".join(expertise))
-    return _SYSTEM_PROMPT + "\n".join(section) + "\n"
+    return _SYSTEM_PROMPT + _memory_block(user_memory) + "\n".join(section) + "\n"
 
 
 _client: OpenAI | None = None
@@ -311,7 +358,8 @@ def _as_data_uri(screenshot: str) -> str:
 
 
 def _build_messages(command: str, ui_tree: str, state: dict | None, screenshot: str | None,
-                    unlocked: frozenset[str] = frozenset()) -> list[dict]:
+                    unlocked: frozenset[str] = frozenset(),
+                    user_memory: list[dict] | None = None) -> list[dict]:
     parts = [
         f"COMMAND:\n{command}\n",
         f"UI TREE:\n{ui_tree if ui_tree else '(empty — tree unavailable for this app)'}\n",
@@ -339,7 +387,7 @@ def _build_messages(command: str, ui_tree: str, state: dict | None, screenshot: 
     else:
         content = text_block
     return [
-        {"role": "system", "content": _system_prompt(unlocked)},
+        {"role": "system", "content": _system_prompt(unlocked, user_memory)},
         {"role": "user", "content": content},
     ]
 
@@ -442,6 +490,27 @@ def _parse_decision(raw: str, allow_coords: bool) -> dict:
     return _decision_from(_extract_json(raw) or {}, allow_coords)
 
 
+def _coerce_remember(v: Any) -> list[dict]:
+    """Validate a model's optional top-level "remember" array into storable items.
+
+    Only well-formed {bucket, key, value} with a known bucket survive — a malformed
+    or hallucinated entry is dropped, never stored, and never allowed to 500 a command.
+    Capped per decision: remembering is a deliberate act, not a firehose.
+    """
+    out = []
+    if not isinstance(v, list):
+        return out
+    for it in v[:8]:
+        if not isinstance(it, dict):
+            continue
+        bucket = str(it.get("bucket", "")).strip().lower()
+        key = str(it.get("key", "")).strip()
+        value = str(it.get("value", "")).strip()
+        if bucket in memory.BUCKETS and key and value:
+            out.append({"bucket": bucket, "key": key, "value": value})
+    return out
+
+
 def _decision_from(data: dict, allow_coords: bool) -> dict:
     actions = []
     for a in (data.get("actions") or []):
@@ -467,25 +536,30 @@ def _decision_from(data: dict, allow_coords: bool) -> dict:
         # Only catalog ids pass through — a hallucinated skill name must never gate.
         "skill": skill if isinstance(skill, str) and skill in skills.ALL else None,
         "reasoning_summary": str(data.get("reasoning_summary", ""))[:500],
+        # Facts the user asked to save this turn; the server persists them (unless incognito).
+        "remember": _coerce_remember(data.get("remember")),
     }
 
 
 def decide(command: str, ui_tree: str, state: dict | None = None,
            screenshot: str | None = None,
-           unlocked_skills: frozenset[str] = frozenset()) -> tuple[dict, dict]:
+           unlocked_skills: frozenset[str] = frozenset(),
+           user_memory: list[dict] | None = None) -> tuple[dict, dict]:
     """Provider-neutral decision entry point.
 
     unlocked_skills selects which paid expertise packs enter the prompt (locked
-    packs are only listed for tagging — see _system_prompt).
+    packs are only listed for tagging — see _system_prompt). user_memory is this
+    user's saved facts (people/preferences/vocabulary), injected so loose commands
+    resolve without re-asking.
 
     Returns (decision, usage):
       decision = {"actions": [...], "done": bool, "need_screenshot": bool,
-                  "skill": str | None, "reasoning_summary": str}
+                  "skill": str | None, "reasoning_summary": str, "remember": [...]}
       usage    = {"prompt_tokens", "completion_tokens", "total_tokens", "latency_ms"}
     """
     client = _get_client()
     model = os.environ.get("LLM_MODEL", "deepseek-ai/deepseek-v4-pro")
-    messages = _build_messages(command, ui_tree, state, screenshot, unlocked_skills)
+    messages = _build_messages(command, ui_tree, state, screenshot, unlocked_skills, user_memory)
 
     t0 = time.monotonic()
     tokens = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}

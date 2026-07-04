@@ -115,5 +115,48 @@ class RetryTests(unittest.TestCase):
         self.assertEqual(usage["total_tokens"], 4180)
 
 
+class MemoryTests(unittest.TestCase):
+    SAMPLE = [
+        {"bucket": "people", "key": "my accountant", "value": "Sarah Chen <sarah@firm.com>"},
+        {"bucket": "preferences", "key": "email sign-off", "value": "Best, Alex"},
+        {"bucket": "vocabulary", "key": "the deck", "value": "Q3-pitch.pptx"},
+    ]
+
+    def test_remember_array_is_parsed_and_validated(self):
+        d = brain._parse_decision(
+            '{"actions": [], "done": true, "reasoning_summary": "noted", "remember": ['
+            '{"bucket": "people", "key": "my accountant", "value": "Sarah <s@x.com>"},'
+            '{"bucket": "nonsense", "key": "x", "value": "y"},'      # unknown bucket -> dropped
+            '{"bucket": "preferences", "key": "", "value": "z"}]}',  # empty key -> dropped
+            allow_coords=False)
+        self.assertEqual(d["remember"],
+                         [{"bucket": "people", "key": "my accountant", "value": "Sarah <s@x.com>"}])
+
+    def test_remember_defaults_to_empty_list(self):
+        d = brain._parse_decision(GOOD_REPLY, allow_coords=False)
+        self.assertEqual(d["remember"], [])
+
+    def test_saved_facts_render_into_the_system_prompt_grouped(self):
+        sp = brain._system_prompt(frozenset(), self.SAMPLE)
+        self.assertIn("my accountant = Sarah Chen <sarah@firm.com>", sp)
+        self.assertIn("email sign-off = Best, Alex", sp)
+        self.assertIn("the deck = Q3-pitch.pptx", sp)
+        # grouped under bucket headers, in the canonical order
+        self.assertLess(sp.index("people:"), sp.index("preferences:"))
+        self.assertLess(sp.index("preferences:"), sp.index("vocabulary:"))
+
+    def test_memory_rules_present_even_with_no_saved_facts(self):
+        sp = brain._system_prompt(frozenset(), None)
+        self.assertIn("(nothing saved yet)", sp)
+        for rule in ("RESOLVE references", "ONE QUESTION", "REMEMBER on request"):
+            self.assertIn(rule, sp)
+
+    def test_build_messages_injects_memory_into_the_system_message(self):
+        msgs = brain._build_messages("email my accountant", "a window", None, None,
+                                     frozenset(), self.SAMPLE)
+        self.assertEqual(msgs[0]["role"], "system")
+        self.assertIn("Sarah Chen <sarah@firm.com>", msgs[0]["content"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 # Load server-only secrets (LLM_API_KEY etc.) from server/.env before serving.
 load_dotenv(Path(__file__).with_name(".env"))
 
-from server import accounts, auth, brain, entitlements, skills  # noqa: E402 - must follow load_dotenv
+from server import accounts, auth, brain, entitlements, memory, skills  # noqa: E402 - must follow load_dotenv
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 # Keep the provider host and any request bodies OUT of our logs (Rules 2 & 4):
@@ -80,6 +80,9 @@ class CommandRequest(BaseModel):
     ui_tree: str = Field(default="", max_length=300_000)
     screenshot: Optional[str] = Field(default=None, max_length=8_000_000)  # base64; fallback only
     state: Optional[dict[str, Any]] = None
+    # Pause/incognito ("don't remember this session"): the client toggle; when true the
+    # server resolves against existing memory but saves NOTHING new from this command.
+    incognito: bool = False
 
 
 class CommandResponse(BaseModel):
@@ -94,6 +97,9 @@ class CommandResponse(BaseModel):
     skill: Optional[str] = None
     locked_skill: Optional[str] = None
     reasoning_summary: str
+    # Facts saved from THIS command (the shell surfaces a "🧠 Remembered …" note).
+    # Empty when nothing was saved — including when incognito suppressed a save.
+    remembered: list[dict] = []
     # Latency metadata for the client's per-step breakdown (numbers only — never
     # screen data, Rule 4): llm_ms = provider call, server_ms = total server time.
     timings: Optional[dict[str, int]] = None
@@ -174,7 +180,20 @@ def command(req: CommandRequest, user_id: str = Depends(current_user)) -> Comman
     unlocked = entitlements.unlocked(user_id)
     try:
         decision, usage = brain.decide(req.command, req.ui_tree, req.state, req.screenshot,
-                                       unlocked_skills=unlocked)
+                                       unlocked_skills=unlocked,
+                                       user_memory=memory.list_items(user_id))
+        # Persist any facts the user asked to save this turn — unless incognito, in
+        # which case we save NOTHING and correct the brain's confirmation so the UI
+        # never claims to remember what it did not (honesty, Rules 3 & 4).
+        attempted = decision.pop("remember", []) or []
+        remembered: list[dict] = []
+        if attempted and req.incognito:
+            decision["reasoning_summary"] = "Incognito is on — I won't remember that this session."
+        elif attempted:
+            for it in attempted:
+                saved = memory.add(user_id, it["bucket"], it["key"], it["value"], source="explicit")
+                if saved:
+                    remembered.append(saved)
         # THE GATE (server-side, per request): a decision tagged with a skill the
         # user has not bought never executes — it becomes the checkout upsell.
         if decision.get("skill") and decision["skill"] not in unlocked:
@@ -187,7 +206,7 @@ def command(req: CommandRequest, user_id: str = Depends(current_user)) -> Comman
         if isinstance(usage.get("latency_ms"), int):
             timings["llm_ms"] = usage["latency_ms"]
         # build inside the guard: a bad shape → 502, not 500
-        response = CommandResponse(**decision, timings=timings)
+        response = CommandResponse(**decision, remembered=remembered, timings=timings)
     except Exception as e:  # noqa: BLE001 - never surface engine internals to the client
         log.error("brain error user=%s err=%s", user_id, type(e).__name__)
         raise HTTPException(status_code=502, detail="Engine could not produce a decision.")
@@ -196,14 +215,49 @@ def command(req: CommandRequest, user_id: str = Depends(current_user)) -> Comman
     # screenshot, or command text (Rule 4).
     calls = auth.record_call(user_id)
     log.info(
-        "cmd user=%s actions=%d types=%s done=%s vision=%s asked_vision=%s skill=%s latency_ms=%s "
+        "cmd user=%s actions=%d types=%s done=%s vision=%s asked_vision=%s skill=%s mem=%d latency_ms=%s "
         "tokens=%s/%s finish=%s parse_ok=%s retried=%s calls=%d",
         user_id, len(response.actions),
         ",".join(a.type for a in response.actions) or "-",
         response.done, bool(req.screenshot), response.need_screenshot,
-        response.skill or "-",
+        response.skill or "-", len(response.remembered),
         usage.get("latency_ms"),
         usage.get("prompt_tokens"), usage.get("completion_tokens"),
         usage.get("finish_reason"), usage.get("parse_ok"), usage.get("retried"), calls,
     )
     return response
+
+
+# --- Memory controls: view / edit / delete / wipe, all per authenticated user ---
+# These are the honesty backbone: the user can always SEE exactly what OrphicOS
+# remembers and erase any or all of it. Sync (def) so the store's brief file I/O
+# runs on the threadpool, never on the event loop.
+
+class MemoryEdit(BaseModel):
+    value: str = Field(max_length=memory.MAX_VALUE_LEN)
+
+
+@app.get("/memory")
+def list_memory(user_id: str = Depends(current_user)) -> list[dict]:
+    """Everything OrphicOS remembers about this user, for the shell's memory panel."""
+    return memory.list_items(user_id)
+
+
+@app.put("/memory/{item_id}")
+def edit_memory(item_id: str, body: MemoryEdit, user_id: str = Depends(current_user)) -> dict:
+    if not memory.update(user_id, item_id, body.value):
+        raise HTTPException(status_code=404, detail="No such memory item.")
+    return {"ok": True}
+
+
+@app.delete("/memory/{item_id}")
+def forget_one(item_id: str, user_id: str = Depends(current_user)) -> dict:
+    if not memory.delete(user_id, item_id):
+        raise HTTPException(status_code=404, detail="No such memory item.")
+    return {"ok": True}
+
+
+@app.delete("/memory")
+def forget_all(user_id: str = Depends(current_user)) -> dict:
+    """'Forget everything' — the one-confirm wipe. Server-authoritative, user-owned."""
+    return {"ok": True, "removed": memory.wipe(user_id)}
