@@ -523,6 +523,14 @@ class WaitForTests(unittest.TestCase):
         with self.assertRaises(ActionError):
             actor.execute({"type": "wait_for", "value": "gone:"})
 
+    def test_timeout_override_is_read_and_clamped(self):
+        wt = self._mod.Actor._wait_timeout
+        self.assertEqual(wt(None), self._mod._WAIT_FOR_TIMEOUT)       # no override -> short default
+        self.assertEqual(wt(180), 180.0)                             # long op keeps its ceiling
+        self.assertEqual(wt(99999), self._mod._WAIT_FOR_TIMEOUT_MAX)  # clamped to the max
+        self.assertEqual(wt(0.01), 1.0)                              # floored so it can't be ~0
+        self.assertEqual(wt("nonsense"), self._mod._WAIT_FOR_TIMEOUT)  # junk -> default, no crash
+
 
 class ClipboardAndPathTests(unittest.TestCase):
     def setUp(self) -> None:

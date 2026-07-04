@@ -53,6 +53,17 @@ class ExtractJsonTests(unittest.TestCase):
         self.assertEqual(d["actions"], [])
         self.assertFalse(d["done"])
 
+    def test_wait_for_timeout_passes_through_and_coerces(self):
+        d = brain._parse_decision(
+            '{"actions": ['
+            '{"type": "wait_for", "value": "gone:Installing", "timeout": 180},'
+            '{"type": "press", "value": "enter"},'
+            '{"type": "wait_for", "value": "Save As", "timeout": "oops"}], "done": false}',
+            allow_coords=False)
+        self.assertEqual(d["actions"][0]["timeout"], 180.0)   # long-op override survives
+        self.assertIsNone(d["actions"][1]["timeout"])         # absent -> None (short default)
+        self.assertIsNone(d["actions"][2]["timeout"])         # bad value -> None, never crashes
+
 
 class RetryTests(unittest.TestCase):
     def test_clean_reply_never_retries(self):

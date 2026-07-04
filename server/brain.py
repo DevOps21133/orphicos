@@ -69,8 +69,11 @@ Rules:
   absolute file/folder path for open_path; or, for screenshot, the save location (see the screenshot rule —
   null saves to the user's Pictures\\Screenshots folder).
 - For a long-running operation (an install, a large copy, a slow page), do NOT chain fixed waits: emit ONE
-  {"type":"wait_for","value":"<name that will appear>"} or {"type":"wait_for","value":"gone:<name>"} — the
-  client polls for up to 2 minutes and re-plans if it times out. Pure waiting does not use up your step budget.
+  {"type":"wait_for","value":"<name that will appear>"} or {"type":"wait_for","value":"gone:<name>"}. wait_for
+  polls for ~20 seconds by default (enough for any dialog or app window to appear) and re-plans if it times
+  out, so a wait that will never resolve fails fast instead of hanging. For a genuinely long wait — an install,
+  a large file copy, a big download — add "timeout" with the seconds to allow, e.g.
+  {"type":"wait_for","value":"gone:Installing","timeout":180}. Pure waiting does not use up your step budget.
 - To open a specific file or folder whose full path you know, prefer
   {"type":"open_path","value":"C:\\\\full\\\\path"} (opens with the default app, like a double-click in
   Explorer) over click-navigating to it.
@@ -424,6 +427,17 @@ def _coerce_coords(c: Any) -> list[float] | None:
     return None
 
 
+def _coerce_timeout(v: Any) -> float | None:
+    # Optional wait_for override (seconds) for a genuinely long wait; the client
+    # clamps it, so we only need a clean number or None.
+    if v is None:
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
 def _parse_decision(raw: str, allow_coords: bool) -> dict:
     return _decision_from(_extract_json(raw) or {}, allow_coords)
 
@@ -442,6 +456,8 @@ def _decision_from(data: dict, allow_coords: bool) -> dict:
             # Rule 5: coords are only meaningful on the vision fallback; drop them otherwise.
             "coords": _coerce_coords(a.get("coords")) if allow_coords else None,
             "value": _coerce_str(a.get("value")),
+            # Optional per-action wait_for ceiling (seconds); only long ops set it.
+            "timeout": _coerce_timeout(a.get("timeout")),
         })
     skill = data.get("skill")
     return {

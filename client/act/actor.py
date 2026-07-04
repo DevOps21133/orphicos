@@ -21,7 +21,14 @@ from typing import Callable
 from client._engine import Desktop, escape_text_for_sendkeys, uia
 from client.act._focus_guard import foreground_console_label
 
-_WAIT_FOR_TIMEOUT = 120.0  # ceiling for wait_for polling (installs, big copies)
+# A dialog/window that WILL appear shows in ~1s; only genuinely long operations
+# (installs, big copies, downloads) need to wait longer. So the default is short —
+# a wait_for that won't resolve (e.g. "Save As" after a ctrl+s that saved silently
+# because the file already had a name) fails fast and lets the brain re-plan, instead
+# of hanging for two minutes. A plan that knows its wait is long passes an explicit
+# "timeout" (seconds) to raise the ceiling for that one action, clamped to the max.
+_WAIT_FOR_TIMEOUT = 20.0
+_WAIT_FOR_TIMEOUT_MAX = 300.0
 _WAIT_FOR_POLL = 0.5
 _CLIPBOARD_TYPE_THRESHOLD = 200  # chars; longer text is pasted, not typed key-by-key
 
@@ -455,22 +462,35 @@ class Actor:
     def _do_wait_for(self, action: dict, value) -> str:
         """Poll until an element/window whose name contains `value` appears —
         or disappears, with a "gone:" prefix. Long operations (installs, big
-        copies, slow pages) need this instead of chained fixed waits. A timeout
-        raises ActionError so the brain re-plans instead of the run hanging."""
+        copies, slow pages) need this instead of chained fixed waits, and can
+        raise the short default ceiling via an action "timeout" (seconds). A
+        timeout raises ActionError so the brain re-plans instead of the run hanging."""
         spec = str(value or action.get("target_selector") or "").strip()
         want_gone = spec.lower().startswith("gone:")
         needle = (spec[5:] if want_gone else spec).strip().lower()
         if not needle:
             raise ActionError("wait_for needs an element/window name in 'value'"
                               " (prefix 'gone:' to wait for it to disappear)")
-        deadline = monotonic() + _WAIT_FOR_TIMEOUT
+        timeout = self._wait_timeout(action.get("timeout"))
+        deadline = monotonic() + timeout
         while monotonic() < deadline:
             if self._should_stop is not None and self._should_stop():
                 return f"wait for {spec!r} interrupted by stop"
             if self._name_present(needle) != want_gone:
                 return f"{needle!r} {'disappeared' if want_gone else 'appeared'}"
             sleep(_WAIT_FOR_POLL)
-        raise ActionError(f"wait_for {spec!r} timed out after {_WAIT_FOR_TIMEOUT:g}s")
+        raise ActionError(f"wait_for {spec!r} timed out after {timeout:g}s")
+
+    @staticmethod
+    def _wait_timeout(raw) -> float:
+        """The wait_for ceiling for one action: the short default unless the plan
+        asked for longer, clamped to the max so a bad value can't hang the run."""
+        if raw is None:
+            return _WAIT_FOR_TIMEOUT
+        try:
+            return max(1.0, min(float(raw), _WAIT_FOR_TIMEOUT_MAX))
+        except (TypeError, ValueError):
+            return _WAIT_FOR_TIMEOUT
 
     def _name_present(self, needle: str) -> bool:
         """Case-insensitive substring match over the fresh snapshot: the active
