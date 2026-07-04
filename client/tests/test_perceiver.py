@@ -14,9 +14,10 @@ from PIL import Image
 
 from client.perceive import Perceiver
 from client.perceive import perceiver as perceiver_mod
-from client.perceive.perceiver import (MAX_SCROLLABLE_ELEMENTS, MAX_TREE_ELEMENTS,
-                                       serialize_scrollables, serialize_tree)
-from client.tests.fakes import FakeDesktop, FakeNode
+from client.perceive.perceiver import (MAX_SCROLLABLE_ELEMENTS, MAX_TEXT_ELEMENTS,
+                                       MAX_TREE_ELEMENTS,
+                                       serialize_scrollables, serialize_text, serialize_tree)
+from client.tests.fakes import FakeDesktop, FakeNode, FakeTextNode
 
 WIN = "Untitled - Notepad"
 
@@ -139,6 +140,68 @@ class PerceiverTest(unittest.TestCase):
         desktop = FakeDesktop(node_names=["Save"], active_window="App")
         p = Perceiver(desktop).perceive()
         self.assertNotIn("SCROLLABLE", p.ui_tree)
+
+
+class TextSectionTest(unittest.TestCase):
+    """The ON-SCREEN TEXT section (Wave 2 'read it back'): windows-use's
+    dom_informative_nodes — readable static text the tree's element NAMES miss —
+    serialized so the brain can answer 'what does this say?' without a screenshot."""
+
+    def test_section_appended_under_tree(self) -> None:
+        desktop = FakeDesktop(
+            node_names=["Save"], active_window="App",
+            text_nodes=[FakeTextNode("Error: printer not connected"),
+                        FakeTextNode("Total: $42.50")])
+        p = Perceiver(desktop).perceive()
+        self.assertIn("0|Button|Save|", p.ui_tree)        # interactive tree intact
+        self.assertIn("ON-SCREEN TEXT", p.ui_tree)
+        self.assertIn("Error: printer not connected", p.ui_tree)
+        self.assertIn("Total: $42.50", p.ui_tree)
+
+    def test_no_section_when_no_text(self) -> None:
+        desktop = FakeDesktop(node_names=["Save"], active_window="App")
+        p = Perceiver(desktop).perceive()
+        self.assertNotIn("ON-SCREEN TEXT", p.ui_tree)
+
+    def test_empty_and_blank_lines_dropped(self) -> None:
+        desktop = FakeDesktop(node_names=["Save"], active_window="App",
+                              text_nodes=[FakeTextNode(""), FakeTextNode("   "),
+                                          FakeTextNode("Real value")])
+        p = Perceiver(desktop).perceive()
+        self.assertIn("Real value", p.ui_tree)
+        # Only one text line should appear (the two blanks dropped).
+        text_lines = [ln for ln in p.ui_tree.splitlines()
+                      if ln and ln not in ("ON-SCREEN TEXT (readable content the brain "
+                                           "can read back / answer from):",)
+                      and "ON-SCREEN TEXT" not in ln and "|" not in ln
+                      and not ln.startswith("#") and not ln.startswith("ACTIVE")
+                      and not ln.startswith("OPEN WINDOWS") and not ln.startswith("-")]
+        self.assertEqual(len(text_lines), 1)
+
+    def test_exact_duplicates_collapse(self) -> None:
+        # A status bar often repeats a label that appears nearby — keep one copy.
+        desktop = FakeDesktop(node_names=["Save"], active_window="App",
+                              text_nodes=[FakeTextNode("Ready"), FakeTextNode("Ready"),
+                                          FakeTextNode("Ready")])
+        p = Perceiver(desktop).perceive()
+        self.assertEqual(p.ui_tree.count("Ready"), 1)
+
+    def test_capped_at_max_with_omitted_note(self) -> None:
+        nodes = [FakeTextNode(f"line {i}") for i in range(MAX_TEXT_ELEMENTS + 5)]
+        desktop = FakeDesktop(node_names=["Save"], active_window="App", text_nodes=nodes)
+        p = Perceiver(desktop).perceive()
+        self.assertIn(f"+5 more lines omitted", p.ui_tree)
+        # Each kept line appears once; the 5 overflow lines do not.
+        for i in range(MAX_TEXT_ELEMENTS):
+            self.assertIn(f"line {i}", p.ui_tree)
+        self.assertNotIn(f"line {MAX_TEXT_ELEMENTS + 4}", p.ui_tree)
+
+    def test_text_alone_does_not_flag_vision_fallback(self) -> None:
+        # On-screen text is readable content, not a canvas-app signal. A window with
+        # an interactive element AND text must not trigger the screenshot fallback.
+        desktop = FakeDesktop(node_names=["Save"], active_window="App",
+                              text_nodes=[FakeTextNode("some readable text")])
+        self.assertFalse(Perceiver(desktop).perceive().is_empty)
 
 
 class InsufficiencyTest(unittest.TestCase):

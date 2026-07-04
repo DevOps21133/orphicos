@@ -30,6 +30,10 @@ from client._engine import Desktop
 MAX_TREE_ELEMENTS = 300
 # A handful of scrollable panes is plenty of signal; more is nested-container noise.
 MAX_SCROLLABLE_ELEMENTS = 8
+# Readable on-screen text lines (Wave 2 "read it back"). Most answerable questions
+# are settled by the first pageful of text; the cap keeps the payload bounded when
+# a long document/web page is open. Trailing lines are summarized, not dropped.
+MAX_TEXT_ELEMENTS = 40
 
 # --- Vision-fallback framing (Rule 5) --------------------------------------------
 # windows-use captures the ENTIRE multi-monitor virtual desktop. The vision model
@@ -212,6 +216,43 @@ def serialize_scrollables(nodes: list) -> str:
          "# type|name|scrolled"] + rows)
 
 
+def serialize_text(nodes: list) -> str:
+    """The ON-SCREEN TEXT section appended under the tree (Wave 2 "read it back").
+
+    windows-use already collects the active window's readable text — labels, cell
+    values, error messages, document body — as `dom_informative_nodes`. The
+    interactive tree above carries element NAMES (button labels, edit fields) but is
+    blind to static text, so "what does this error say?", "read the total in A6",
+    or "what's the selected file?" could not be answered. This section gives the
+    brain that text without a screenshot (Rule 5's tree-first principle): fast,
+    exact, and cheap, where vision would be slow and lossy.
+
+    Trimmed to stay payload-bounded: near-empty lines dropped, exact duplicates
+    collapsed (a status bar that repeats a label), capped at MAX_TEXT_ELEMENTS with
+    a "+N more lines" tail when a long document or web page is open.
+    """
+    seen: set[str] = set()
+    rows: list[str] = []
+    omitted = 0
+    for node in nodes:
+        line = _clean(getattr(node, "text", "") or "")
+        if not line:
+            continue
+        if line in seen:  # a status bar / breadcrumb that repeats a nearby label
+            continue
+        seen.add(line)
+        if len(rows) >= MAX_TEXT_ELEMENTS:
+            omitted += 1
+            continue
+        rows.append(line)
+    if not rows:
+        return ""
+    header = "ON-SCREEN TEXT (readable content the brain can read back / answer from):"
+    if omitted:
+        header += f"  (+{omitted} more lines omitted)"
+    return "\n".join([header] + rows)
+
+
 # Bare window-chrome names: when the active window's OWN rows are only these, the
 # app paints its content itself (canvas/DirectX/custom-drawn) and the tree gives
 # the brain nothing to act on — the vision fallback must fire (Rule 5).
@@ -257,6 +298,9 @@ class Perceiver:
         scroll_block = serialize_scrollables(getattr(tree, "scrollable_nodes", None) or [])
         if scroll_block:
             ui_tree = f"{ui_tree}\n{scroll_block}"
+        text_block = serialize_text(getattr(tree, "dom_informative_nodes", None) or [])
+        if text_block:
+            ui_tree = f"{ui_tree}\n{text_block}"
         insufficient = (not tree.status) or tree_insufficient(active, nodes)
         return Perception(ui_tree=ui_tree, is_empty=insufficient)
 

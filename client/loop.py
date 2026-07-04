@@ -213,6 +213,12 @@ def run_command(
             # (the actions open that skill's checkout page); the shell renders this
             # step distinctly.
             event["locked_skill"] = str(decision["locked_skill"])
+        if decision.get("answer"):
+            # The brain replied to a question about on-screen content (Wave 2
+            # "read it back"). Surfaced as the engine's spoken answer, NOT written
+            # into history/STATE (an answer is not an action; STATE stays compact,
+            # and a stale answer would mislead the next plan).
+            event["answer"] = str(decision["answer"])
         if decision.get("remembered"):
             # Facts the user asked to save this turn — the shell shows a "🧠 Remembered"
             # note so saving is always visible (never silent profiling, Stage-1 consent).

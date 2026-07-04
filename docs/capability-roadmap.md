@@ -66,12 +66,17 @@ offset bug (screenshot spans all screens, coords applied raw — `actor.py:60-61
 
 ### Wave 2 — "Read it back" (M) — unlocks the question-answering half of the product
 
-| # | Item | Type |
-|---|---|---|
-| 2.1 | Serialize `dom_informative_nodes` as a capped `TEXT:` section of the payload | perception |
-| 2.2 | Add `answer` field to the decision contract, rendered + spoken in the shell (scope the no-echo rule to `reasoning_summary` only). Zero-retention unchanged: answer passes through, never stored | contract |
-| 2.3 | `extract` verb: return a target subtree's text via UIA TextPattern/ValuePattern into STATE | code |
-| 2.4 | Multi-monitor vision fix: capture active monitor only, translate returned coords by its offset | code |
+✅ **2.1 + 2.2 SHIPPED (2026-07-04).** The perceiver now serializes
+`dom_informative_nodes` as a capped `ON-SCREEN TEXT` section, and the decision
+contract carries an `answer` field — surfaced in the shell, scoped the no-echo
+rule to `reasoning_summary` only, never logged (Rule 4). 2.3 and 2.4 remain open.
+
+| # | Item | Type | Status |
+|---|---|---|---|
+| 2.1 | Serialize `dom_informative_nodes` as a capped `TEXT:` section of the payload | perception | ✅ done |
+| 2.2 | Add `answer` field to the decision contract, rendered + spoken in the shell (scope the no-echo rule to `reasoning_summary` only). Zero-retention unchanged: answer passes through, never stored | contract | ✅ done |
+| 2.3 | `extract` verb: return a target subtree's text via UIA TextPattern/ValuePattern into STATE | code | open |
+| 2.4 | Multi-monitor vision fix: capture active monitor only, translate returned coords by its offset | code | open |
 
 ### Wave 3 — Interaction completeness (S–M)
 

@@ -72,6 +72,24 @@ class ControlFlowTests(unittest.TestCase):
         self._run(desktop, brain, on_event=events.append)
         self.assertNotIn("locked_skill", events[0])
 
+    def test_answer_reaches_the_step_event(self):
+        # A read-back answer (Wave 2): the shell surfaces it on the step event, but
+        # it is NOT an action — so it never enters STATE/history that the next plan
+        # would read (a stale answer would mislead the brain on a later command).
+        desktop = FakeDesktop(node_names=["Save"], active_window="App")
+        answer = _decision([], done=True, summary="reading the total")
+        answer["answer"] = "The total in A6 is $42.50."
+        brain = FakeBrain([answer])
+        events = []
+        self._run(desktop, brain, on_event=events.append)
+        self.assertEqual(events[0]["answer"], "The total in A6 is $42.50.")
+
+        # A plain decision never carries the key — mirroring locked_skill's contract.
+        brain = FakeBrain([_decision([WAIT0], done=True)])
+        events = []
+        self._run(desktop, brain, on_event=events.append)
+        self.assertNotIn("answer", events[0])
+
     def test_multi_step_until_done(self):
         desktop = FakeDesktop(node_names=["Save"], active_window="Book1 - Excel")
         brain = FakeBrain([

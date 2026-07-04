@@ -97,6 +97,10 @@ class CommandResponse(BaseModel):
     skill: Optional[str] = None
     locked_skill: Optional[str] = None
     reasoning_summary: str
+    # The reply to a question about on-screen content (Wave 2 "read it back").
+    # Could echo screen text, so it is NEVER logged server-side (Rule 4) — only
+    # passed through to the shell, where it renders as the engine's spoken reply.
+    answer: Optional[str] = None
     # Facts saved from THIS command (the shell surfaces a "🧠 Remembered …" note).
     # Empty when nothing was saved — including when incognito suppressed a save.
     remembered: list[dict] = []

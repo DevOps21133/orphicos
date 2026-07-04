@@ -48,7 +48,8 @@ Return ONLY a JSON object (no prose, no markdown) with this exact shape:
                       call will then include a screenshot; otherwise false>,
   "skill": <the id of the PAID SKILLS catalog entry this COMMAND requires, else null — see the PAID SKILLS
             section at the end>,
-  "reasoning_summary": "<one short sentence; never echo screen contents>"
+  "reasoning_summary": "<one short sentence; never echo screen contents>",
+  "answer": "<the reply to a QUESTION about what is on screen, else null — see the ANSWERING rule below>"
 }
 
 Rules:
@@ -125,7 +126,15 @@ Rules:
   does not exist until the relevant pane is scrolled to the bottom.
 - If an action in your plan fails, the client aborts the rest of the plan and calls you again; STATE will contain
   "failed_action" describing which action failed and why. Re-plan from the fresh tree — do not blindly repeat it.
-- Keep "reasoning_summary" to one sentence and NEVER copy screen contents into it.
+- Keep "reasoning_summary" to one sentence. It is a STATUS line only ("Saved the file.", "Opened Excel") — NEVER copy
+  screen contents (text, values, messages) into it.
+- ANSWERING a question is the job of the separate "answer" field, NOT reasoning_summary. Set "answer" to a short,
+  direct reply ONLY when the COMMAND is a question about content that is currently on screen or in STATE — "what does
+  this error say?", "what's the total in A6?", "read me the subject line", "which file is selected?". Read the value
+  from the ON-SCREEN TEXT section, the tree, or STATE, and put the reply in "answer" verbatim or lightly paraphrased,
+  with "actions": [] and done=true. For EVERY command that is an instruction to DO something (open, type, save, send,
+  click), leave "answer" null — answer is never a progress note, never a narration of actions taken. Never invent a
+  value that is not actually visible; if the answer is not on screen or in STATE, say so in "answer" instead of guessing.
 
 How to accomplish tasks:
 - Drive the GUI the way a person would. NEVER accomplish a task by typing commands into a terminal, console,
@@ -529,6 +538,7 @@ def _decision_from(data: dict, allow_coords: bool) -> dict:
             "timeout": _coerce_timeout(a.get("timeout")),
         })
     skill = data.get("skill")
+    answer_raw = data.get("answer")
     return {
         "actions": actions,
         "done": bool(data.get("done", False)),
@@ -536,6 +546,10 @@ def _decision_from(data: dict, allow_coords: bool) -> dict:
         # Only catalog ids pass through — a hallucinated skill name must never gate.
         "skill": skill if isinstance(skill, str) and skill in skills.ALL else None,
         "reasoning_summary": str(data.get("reasoning_summary", ""))[:500],
+        # The reply to a question about on-screen content (Wave 2 "read it back").
+        # Could echo screen text, so it is NEVER logged (Rule 4) and is capped to
+        # bound a runaway model reply.
+        "answer": None if answer_raw is None else str(answer_raw)[:2000].strip() or None,
         # Facts the user asked to save this turn; the server persists them (unless incognito).
         "remember": _coerce_remember(data.get("remember")),
     }
@@ -554,7 +568,8 @@ def decide(command: str, ui_tree: str, state: dict | None = None,
 
     Returns (decision, usage):
       decision = {"actions": [...], "done": bool, "need_screenshot": bool,
-                  "skill": str | None, "reasoning_summary": str, "remember": [...]}
+                  "skill": str | None, "reasoning_summary": str, "answer": str | None,
+                  "remember": [...]}
       usage    = {"prompt_tokens", "completion_tokens", "total_tokens", "latency_ms"}
     """
     client = _get_client()

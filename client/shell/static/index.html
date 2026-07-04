@@ -148,6 +148,9 @@
 
   /* a step that saved a fact */
   .remembered { color: var(--accent); font-size: 13px; margin: 2px 0 8px; }
+  .answer { color: var(--text); background: rgba(108,140,255,0.10); border-left: 3px solid var(--accent);
+            padding: 8px 12px; margin: 2px 0 12px; border-radius: 0 6px 6px 0; white-space: pre-wrap;
+            word-break: break-word; }
 
   /* memory panel */
   .modal.mem { width: min(560px, 92%); max-height: 82vh; display: flex; flex-direction: column; }
@@ -317,6 +320,13 @@
       r.className = "reason";
       r.textContent = ev.reasoning;
       card.appendChild(r);
+    }
+
+    if (ev.answer) {
+      const a = document.createElement("div");
+      a.className = "answer";
+      a.textContent = ev.answer;
+      card.appendChild(a);
     }
 
     if (ev.remembered && ev.remembered.length) {

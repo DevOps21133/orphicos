@@ -158,5 +158,42 @@ class MemoryTests(unittest.TestCase):
         self.assertIn("Sarah Chen <sarah@firm.com>", msgs[0]["content"])
 
 
+class AnswerFieldTests(unittest.TestCase):
+    """The 'answer' field (Wave 2 'read it back'): the reply to a question about
+    on-screen content. Parsed from the model reply, coerced to a capped string,
+    defaulting to None for every command that does something instead of answering."""
+
+    def test_answer_parsed_from_reply(self):
+        d = brain._parse_decision(
+            '{"actions": [], "done": true, "reasoning_summary": "reading the total",'
+            ' "answer": "The total in A6 is $42.50."}',
+            allow_coords=False)
+        self.assertEqual(d["answer"], "The total in A6 is $42.50.")
+
+    def test_answer_defaults_to_none_when_absent(self):
+        # A doing-command (the common case) carries no answer.
+        d = brain._parse_decision(GOOD_REPLY, allow_coords=False)
+        self.assertIsNone(d["answer"])
+
+    def test_answer_is_capped_at_2000_chars(self):
+        long = "x" * 5000
+        d = brain._parse_decision(
+            f'{{"actions": [], "done": true, "reasoning_summary": "r", "answer": "{long}"}}',
+            allow_coords=False)
+        self.assertEqual(len(d["answer"]), 2000)
+
+    def test_whitespace_only_answer_becomes_none(self):
+        d = brain._parse_decision(
+            '{"actions": [], "done": true, "reasoning_summary": "r", "answer": "   "}',
+            allow_coords=False)
+        self.assertIsNone(d["answer"])
+
+    def test_answer_is_always_present_in_decision_shape(self):
+        # Every decision carries the key, even on a safe-degrade empty plan.
+        d = brain._parse_decision("total garbage", allow_coords=False)
+        self.assertIn("answer", d)
+        self.assertIsNone(d["answer"])
+
+
 if __name__ == "__main__":
     unittest.main()

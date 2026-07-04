@@ -28,12 +28,25 @@ class FakeNode:
         self.center = center or FakeCenter()
 
 
+class FakeTextNode:
+    """Stands in for a windows-use TextElementNode (readable on-screen text, Wave 2).
+
+    TextElementNode carries only `.text` — no name/type/coords — so it gets its own
+    minimal double rather than reusing FakeNode."""
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+
 class FakeTreeState:
     def __init__(self, nodes: list[FakeNode], status: bool = True,
-                 scrollable_nodes: list[FakeNode] | None = None) -> None:
+                 scrollable_nodes: list[FakeNode] | None = None,
+                 text_nodes: list[FakeTextNode] | None = None) -> None:
         self.interactive_nodes = list(nodes)
         self.status = status
         self.scrollable_nodes = list(scrollable_nodes or [])
+        # dom_informative_nodes is the engine's readable-text list (Wave 2 read-back).
+        self.dom_informative_nodes = list(text_nodes or [])
 
 
 class FakeWindow:
@@ -57,12 +70,14 @@ class FakeDesktop:
     def __init__(self, node_names: list[str] | None = None, active_window: str | None = None,
                  tree_status: bool = True, screenshot: bytes = b"\x89PNG-fake",
                  raise_on_coords: Exception | None = None,
-                 scrollable_nodes: list[FakeNode] | None = None) -> None:
+                 scrollable_nodes: list[FakeNode] | None = None,
+                 text_nodes: list[FakeTextNode] | None = None) -> None:
         # Nodes belong to the active window, mirroring a real snapshot — the
         # perceiver treats foreign-window rows (e.g. taskbar) as non-content.
         self._window_name = active_window or "Test Window"
         nodes = [FakeNode(n, window_name=self._window_name) for n in (node_names or [])]
-        self._tree = FakeTreeState(nodes, status=tree_status, scrollable_nodes=scrollable_nodes)
+        self._tree = FakeTreeState(nodes, status=tree_status, scrollable_nodes=scrollable_nodes,
+                                   text_nodes=text_nodes)
         win = FakeWindow(active_window) if active_window else None
         self.desktop_state = FakeDesktopState(self._tree, win)
         self._screenshot = screenshot
