@@ -24,13 +24,23 @@ from typing import Callable, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
+from pydantic import BaseModel
 
+from client.net.client import BrainError
 from client.shell import gate
 from client.shell.runner import RunSession
 
 _INDEX = Path(__file__).with_name("static") / "index.html"
 
 SubmitFn = Callable[[RunSession, Callable[[str], None]], None]
+
+
+class _MemoryEdit(BaseModel):
+    value: str
+
+
+class _Incognito(BaseModel):
+    on: bool
 
 
 class Hub:
@@ -106,7 +116,12 @@ class Hub:
 
 def create_app(submit: SubmitFn, health_check: Callable[[], bool],
                server_base: str = "", allowed_origins: Optional[set[str]] = None,
-               voice: Optional[object] = None) -> FastAPI:
+               voice: Optional[object] = None,
+               memory_api: Optional[object] = None) -> FastAPI:
+    # `memory_api` is the BrainClient (duck-typed: list_memory/edit_memory/delete_memory/
+    # wipe_memory + set_incognito/incognito). It proxies the shell's "what OrphicOS
+    # remembers" panel to the server, where the memory actually lives (Rule 1 — the client
+    # stores nothing). None when not wired (tests): the panel reports itself unavailable.
     # `voice` is the Phase 3 VoiceController (duck-typed: .toggle() and .HOTKEY), or None
     # when voice isn't wired (tests). Its transcripts arrive as hub events and only FILL
     # the command bar in the browser — submission stays a human keypress (confirm gate).
@@ -168,6 +183,65 @@ def create_app(submit: SubmitFn, health_check: Callable[[], bool],
         # the machine keeps acting is the worst possible failure of this button).
         stopped, dropped = _stop_everything(hub)
         return JSONResponse({"stopped": stopped, "dropped": dropped})
+
+    # --- Memory panel: view / edit / delete / wipe + the incognito toggle. Blocking
+    # httpx calls run off the event loop via to_thread. Everything is proxied to the
+    # server; the shell keeps no memory of its own (Rule 1).
+    def _unavailable() -> JSONResponse:
+        return JSONResponse({"error": "Memory isn't available right now."}, status_code=503)
+
+    def _relay_error(e: Exception) -> JSONResponse:
+        msg = str(e) if isinstance(e, BrainError) else "Memory is temporarily unavailable."
+        return JSONResponse({"error": msg}, status_code=502)
+
+    @app.get("/api/memory")
+    async def memory_list() -> JSONResponse:
+        if memory_api is None:
+            return JSONResponse({"items": [], "available": False, "incognito": False})
+        try:
+            items = await asyncio.to_thread(memory_api.list_memory)
+        except Exception as e:  # noqa: BLE001 — surface a friendly message, never a stack
+            return _relay_error(e)
+        return JSONResponse({"items": items, "available": True,
+                             "incognito": bool(getattr(memory_api, "incognito", False))})
+
+    @app.put("/api/memory/{item_id}")
+    async def memory_edit(item_id: str, body: _MemoryEdit) -> JSONResponse:
+        if memory_api is None:
+            return _unavailable()
+        try:
+            await asyncio.to_thread(memory_api.edit_memory, item_id, body.value)
+        except Exception as e:  # noqa: BLE001
+            return _relay_error(e)
+        return JSONResponse({"ok": True})
+
+    @app.delete("/api/memory/{item_id}")
+    async def memory_forget_one(item_id: str) -> JSONResponse:
+        if memory_api is None:
+            return _unavailable()
+        try:
+            await asyncio.to_thread(memory_api.delete_memory, item_id)
+        except Exception as e:  # noqa: BLE001
+            return _relay_error(e)
+        return JSONResponse({"ok": True})
+
+    @app.delete("/api/memory")
+    async def memory_wipe() -> JSONResponse:
+        if memory_api is None:
+            return _unavailable()
+        try:
+            removed = await asyncio.to_thread(memory_api.wipe_memory)
+        except Exception as e:  # noqa: BLE001
+            return _relay_error(e)
+        return JSONResponse({"ok": True, "removed": removed})
+
+    @app.post("/api/incognito")
+    async def incognito_set(body: _Incognito) -> JSONResponse:
+        # Session toggle only ("don't remember this session"): flips the flag every
+        # /command then carries, so the server saves nothing until it's turned back off.
+        if memory_api is not None:
+            memory_api.set_incognito(body.on)
+        return JSONResponse({"incognito": bool(getattr(memory_api, "incognito", False))})
 
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket) -> None:

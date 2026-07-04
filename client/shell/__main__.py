@@ -50,7 +50,7 @@ def main() -> int:
 
     app = create_app(submit=worker.submit, health_check=brain.health,
                      server_base=cfg.server_base, allowed_origins=allowed_origins,
-                     voice=voice)
+                     voice=voice, memory_api=brain)  # brain proxies the memory panel + incognito
     voice.bind_emit(app.state.hub.emit)
     voice.start()  # arms push-to-talk and warms the local STT model in the background
 

@@ -140,6 +140,41 @@
   .modal .row button { flex: 1; padding: 12px; font-weight: 650; }
   .approve { background: var(--good); color: #04210f; border: none; }
   .deny { background: transparent; color: var(--bad); border: 1px solid var(--bad); }
+
+  /* header memory button + status pill grouping */
+  .hright { display: flex; align-items: center; gap: 12px; }
+  .hbtn { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); padding: 8px 14px; font-size: 13px; border-radius: 999px; }
+  .hbtn:hover { border-color: var(--accent); }
+
+  /* a step that saved a fact */
+  .remembered { color: var(--accent); font-size: 13px; margin: 2px 0 8px; }
+
+  /* memory panel */
+  .modal.mem { width: min(560px, 92%); max-height: 82vh; display: flex; flex-direction: column; }
+  .mem-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  .mem-head h2 { margin: 0; font-size: 18px; }
+  .x { background: transparent; border: none; color: var(--muted); font-size: 18px; width: 32px; height: 32px; border-radius: 8px; }
+  .x:hover { color: var(--text); background: var(--panel-2); }
+  .mem-note { color: var(--muted); font-size: 13px; margin: 0 0 14px; line-height: 1.5; }
+  .mem-note b { color: var(--text); }
+  .incog { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 14px;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; font-size: 13.5px; cursor: pointer; }
+  .incog input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+  #memBody { overflow-y: auto; flex: 1; }
+  .mem-group { margin-bottom: 16px; }
+  .mem-gh { font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-bottom: 6px; }
+  .mem-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
+  .mem-key { color: var(--text); font-weight: 600; min-width: 130px; max-width: 130px; word-break: break-word; font-size: 13.5px; }
+  .mem-val { flex: 1; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+    color: var(--text); padding: 7px 10px; font: inherit; font-size: 13.5px; outline: none; transition: border-color 0.2s; }
+  .mem-val:focus { border-color: var(--accent); }
+  .mem-val.saved { border-color: var(--good); }
+  .mem-del { background: transparent; border: 1px solid var(--line); color: var(--muted); width: 30px; height: 30px; border-radius: 8px; }
+  .mem-del:hover { color: var(--bad); border-color: var(--bad); }
+  .mem-empty { color: var(--muted); text-align: center; padding: 26px 0; font-size: 13.5px; line-height: 1.5; }
+  .mem-foot { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; }
+  .forget-all { background: transparent; color: var(--bad); border: 1px solid var(--bad); padding: 9px 16px; font-weight: 600; }
+  .forget-all.armed { background: var(--bad); color: #2a0007; }
 </style>
 </head>
 <body>
@@ -148,7 +183,10 @@
       <span class="wordmark">Orphic<b>OS</b></span>
       <span class="tagline">the machine works. You don't.</span>
     </div>
-    <div id="pill" class="pill"><span class="dot"></span><span id="pillText">Connecting…</span></div>
+    <div class="hright">
+      <button class="hbtn" id="memBtn" title="What OrphicOS remembers about you">🧠 Memory</button>
+      <div id="pill" class="pill"><span class="dot"></span><span id="pillText">Connecting…</span></div>
+    </div>
   </header>
 
   <main>
@@ -186,6 +224,26 @@
     </div>
   </div>
 
+  <div class="overlay" id="memOverlay">
+    <div class="modal mem">
+      <div class="mem-head">
+        <h2>What OrphicOS remembers about you</h2>
+        <button class="x" id="memClose" title="Close">✕</button>
+      </div>
+      <p class="mem-note">Facts you chose to save — used to resolve commands like
+        “email my accountant.” This is <b>not</b> your screen data (that is never stored);
+        it's memory you own. Edit or delete anything here, anytime.</p>
+      <label class="incog">
+        <input type="checkbox" id="incogToggle" />
+        <span>Incognito — don't remember anything this session</span>
+      </label>
+      <div id="memBody"></div>
+      <div class="mem-foot">
+        <button class="forget-all" id="forgetAll">Forget everything</button>
+      </div>
+    </div>
+  </div>
+
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -196,9 +254,12 @@
   const overlay = $("overlay"), mVerb = $("mVerb"), mWhat = $("mWhat");
   const stopHint = $("stopHint");
   const mic = $("mic");
+  const memBtn = $("memBtn"), memOverlay = $("memOverlay"), memBody = $("memBody"),
+        incogToggle = $("incogToggle"), forgetAll = $("forgetAll");
   let pendingApproval = null;
   let running = false;
   let voiceState = "idle";
+  let forgetArmed = false;
 
   function clearEmpty() { if (empty) empty.remove(); }
 
@@ -256,6 +317,14 @@
       r.className = "reason";
       r.textContent = ev.reasoning;
       card.appendChild(r);
+    }
+
+    if (ev.remembered && ev.remembered.length) {
+      const m = document.createElement("div");
+      m.className = "remembered";
+      m.textContent = "🧠 Remembered — " +
+        ev.remembered.map((x) => x.key + " = " + x.value).join(";  ");
+      card.appendChild(m);
     }
 
     const acts = document.createElement("div");
@@ -348,6 +417,8 @@
       case "step":
         setThinking(false);
         addStep(ev);
+        // If a fact was just saved and the panel is open, reflect it live.
+        if (ev.remembered && ev.remembered.length && memOverlay.classList.contains("show")) loadMemory();
         if (!ev.done) setThinking(true);
         break;
       case "approval_required":
@@ -460,6 +531,111 @@
     mic.disabled = state === "transcribing";
     mic.textContent = state === "recording" ? "■" : "🎙";
   }
+
+  // ---- memory panel ----
+  const BUCKETS = [["people", "People"], ["preferences", "Preferences"], ["vocabulary", "Vocabulary"]];
+
+  async function loadMemory() {
+    memBody.innerHTML = '<div class="mem-empty">Loading…</div>';
+    try {
+      const r = await fetch("/api/memory");
+      const data = await r.json();
+      incogToggle.checked = !!data.incognito;
+      renderMemory(data.items || [], data.available !== false);
+    } catch (_) {
+      memBody.innerHTML = '<div class="mem-empty">Couldn’t load memory.</div>';
+    }
+  }
+
+  function renderMemory(items, available) {
+    memBody.innerHTML = "";
+    if (!available) { memBody.innerHTML = '<div class="mem-empty">Memory isn’t available right now.</div>'; return; }
+    if (!items.length) {
+      memBody.innerHTML = '<div class="mem-empty">Nothing saved yet.<br>Say or type “remember …” and it will appear here.</div>';
+      return;
+    }
+    const byBucket = {};
+    items.forEach((it) => { (byBucket[it.bucket] = byBucket[it.bucket] || []).push(it); });
+    BUCKETS.forEach(([key, label]) => {
+      const list = byBucket[key];
+      if (!list || !list.length) return;
+      const g = document.createElement("div"); g.className = "mem-group";
+      const h = document.createElement("div"); h.className = "mem-gh"; h.textContent = label;
+      g.appendChild(h);
+      list.forEach((it) => g.appendChild(memRow(it)));
+      memBody.appendChild(g);
+    });
+  }
+
+  function memRow(it) {
+    const row = document.createElement("div"); row.className = "mem-row";
+    const key = document.createElement("div"); key.className = "mem-key"; key.textContent = it.key;
+    const val = document.createElement("input"); val.className = "mem-val"; val.value = it.value;
+    val.title = "Edit, then press Enter to save";
+    val.addEventListener("keydown", async (e) => {
+      if (e.key !== "Enter") return;
+      const v = val.value.trim();
+      if (!v || v === it.value) { val.value = it.value; val.blur(); return; }
+      try {
+        const r = await fetch("/api/memory/" + encodeURIComponent(it.id), {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ value: v }) });
+        if (!r.ok) throw new Error();
+        it.value = v; val.blur();
+        val.classList.add("saved"); setTimeout(() => val.classList.remove("saved"), 900);
+      } catch (_) { val.value = it.value; showError("Couldn’t save that edit."); }
+    });
+    const del = document.createElement("button"); del.className = "mem-del"; del.textContent = "✕";
+    del.title = "Forget this";
+    del.onclick = async () => {
+      try {
+        const r = await fetch("/api/memory/" + encodeURIComponent(it.id), { method: "DELETE" });
+        if (!r.ok) throw new Error();
+        row.remove();
+        if (!memBody.querySelector(".mem-row")) renderMemory([], true);
+      } catch (_) { showError("Couldn’t delete that."); }
+    };
+    row.appendChild(key); row.appendChild(val); row.appendChild(del);
+    return row;
+  }
+
+  function resetForget() {
+    forgetArmed = false;
+    forgetAll.textContent = "Forget everything";
+    forgetAll.classList.remove("armed");
+  }
+
+  function closeMemory() { memOverlay.classList.remove("show"); resetForget(); }
+
+  memBtn.onclick = () => { memOverlay.classList.add("show"); loadMemory(); };
+  $("memClose").onclick = closeMemory;
+  memOverlay.addEventListener("click", (e) => { if (e.target === memOverlay) closeMemory(); });
+
+  incogToggle.onchange = async () => {
+    try {
+      const r = await fetch("/api/incognito", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ on: incogToggle.checked }) });
+      const d = await r.json();
+      incogToggle.checked = !!d.incognito;
+    } catch (_) { showError("Couldn’t change the incognito setting."); }
+  };
+
+  forgetAll.onclick = async () => {
+    if (!forgetArmed) {  // one-confirm wipe: first click arms, second click wipes
+      forgetArmed = true;
+      forgetAll.textContent = "Really forget everything?";
+      forgetAll.classList.add("armed");
+      setTimeout(() => { if (forgetArmed) resetForget(); }, 4000);
+      return;
+    }
+    try {
+      const r = await fetch("/api/memory", { method: "DELETE" });
+      if (!r.ok) throw new Error();
+      renderMemory([], true);
+    } catch (_) { showError("Couldn’t wipe memory."); }
+    resetForget();
+  };
 
   mic.onclick = () => send({ type: "mic" });
   runBtn.onclick = submit;

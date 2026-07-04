@@ -213,6 +213,10 @@ def run_command(
             # (the actions open that skill's checkout page); the shell renders this
             # step distinctly.
             event["locked_skill"] = str(decision["locked_skill"])
+        if decision.get("remembered"):
+            # Facts the user asked to save this turn — the shell shows a "🧠 Remembered"
+            # note so saving is always visible (never silent profiling, Stage-1 consent).
+            event["remembered"] = decision["remembered"]
         on_event(event)
         # History entries must carry enough evidence for the brain to know the work
         # already happened (typed text is not always readable back from the tree):

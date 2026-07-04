@@ -15,6 +15,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from client.loop import run_command
+from client.net.client import BrainError
 from client.shell import gate
 from client.shell.app import create_app
 from client.shell.runner import RunSession
@@ -421,6 +422,99 @@ class VoiceShellTests(unittest.TestCase):
         self.assertEqual(voice.toggles, 2)
         # CONFIRM GATE: a transcript must never start a run by itself.
         self.assertEqual(submitted, [])
+
+
+class _FakeMemoryApi:
+    """Stands in for the BrainClient's memory methods (Rule 14): the shell just proxies
+    to these; no network. Mirrors the real signatures the shell calls."""
+    def __init__(self):
+        self.items = [{"id": "a1", "bucket": "people", "key": "my accountant",
+                       "value": "Sarah <s@x.com>", "source": "explicit",
+                       "created_at": 1.0, "last_used": 1.0}]
+        self.incognito = False
+
+    def list_memory(self):
+        return list(self.items)
+
+    def edit_memory(self, item_id, value):
+        for it in self.items:
+            if it["id"] == item_id:
+                it["value"] = value
+                return
+        raise BrainError("That memory item no longer exists.")
+
+    def delete_memory(self, item_id):
+        before = len(self.items)
+        self.items = [it for it in self.items if it["id"] != item_id]
+        if len(self.items) == before:
+            raise BrainError("That memory item no longer exists.")
+
+    def wipe_memory(self):
+        n = len(self.items)
+        self.items = []
+        return n
+
+    def set_incognito(self, on):
+        self.incognito = bool(on)
+
+
+class MemoryPanelTests(unittest.TestCase):
+    def _app(self, mem):
+        return create_app(submit=lambda s, d: None, health_check=lambda: True, memory_api=mem)
+
+    def test_list_returns_items_and_incognito_state(self):
+        mem = _FakeMemoryApi()
+        with TestClient(self._app(mem)) as client:
+            body = client.get("/api/memory").json()
+        self.assertTrue(body["available"])
+        self.assertFalse(body["incognito"])
+        self.assertEqual(body["items"][0]["key"], "my accountant")
+
+    def test_list_when_not_wired_reports_unavailable(self):
+        with TestClient(self._app(None)) as client:
+            body = client.get("/api/memory").json()
+        self.assertFalse(body["available"])
+        self.assertEqual(body["items"], [])
+
+    def test_edit_updates_the_value(self):
+        mem = _FakeMemoryApi()
+        with TestClient(self._app(mem)) as client:
+            r = client.put("/api/memory/a1", json={"value": "Sarah Chen <sarah@firm.com>"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(mem.items[0]["value"], "Sarah Chen <sarah@firm.com>")
+
+    def test_edit_missing_item_relays_502(self):
+        mem = _FakeMemoryApi()
+        with TestClient(self._app(mem)) as client:
+            r = client.put("/api/memory/nope", json={"value": "x"})
+        self.assertEqual(r.status_code, 502)
+        self.assertIn("no longer exists", r.json()["error"])
+
+    def test_delete_one(self):
+        mem = _FakeMemoryApi()
+        with TestClient(self._app(mem)) as client:
+            r = client.delete("/api/memory/a1")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(mem.items, [])
+
+    def test_wipe_returns_count(self):
+        mem = _FakeMemoryApi()
+        with TestClient(self._app(mem)) as client:
+            r = client.delete("/api/memory")
+        self.assertEqual(r.json()["removed"], 1)
+        self.assertEqual(mem.items, [])
+
+    def test_incognito_toggle_flips_the_flag(self):
+        mem = _FakeMemoryApi()
+        with TestClient(self._app(mem)) as client:
+            r = client.post("/api/incognito", json={"on": True})
+        self.assertTrue(r.json()["incognito"])
+        self.assertTrue(mem.incognito)
+
+    def test_mutations_unavailable_when_not_wired(self):
+        with TestClient(self._app(None)) as client:
+            self.assertEqual(client.delete("/api/memory").status_code, 503)
+            self.assertEqual(client.put("/api/memory/a1", json={"value": "x"}).status_code, 503)
 
 
 if __name__ == "__main__":
