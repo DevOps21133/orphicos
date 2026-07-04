@@ -64,6 +64,37 @@ class ExtractJsonTests(unittest.TestCase):
         self.assertIsNone(d["actions"][1]["timeout"])         # absent -> None (short default)
         self.assertIsNone(d["actions"][2]["timeout"])         # bad value -> None, never crashes
 
+    def test_extract_action_is_allowlisted_and_passes_through(self):
+        # Wave 2.3: extract is a known verb; the brain's target_selector/value
+        # must survive _decision_from so the client can read the control's value.
+        d = brain._parse_decision(
+            '{"actions": [{"type": "extract", "target_selector": "Total"}], "done": false}',
+            allow_coords=False)
+        self.assertEqual(len(d["actions"]), 1)
+        self.assertEqual(d["actions"][0]["type"], "extract")
+        self.assertEqual(d["actions"][0]["target_selector"], "Total")
+
+    def test_extract_with_automation_id_value_passes_through(self):
+        # The tree-invisible targeting mode (Calculator's display) carries the id in value.
+        d = brain._parse_decision(
+            '{"actions": [{"type": "extract", "value": "automation_id:CalculatorResults"}], "done": false}',
+            allow_coords=False)
+        self.assertEqual(d["actions"][0]["value"], "automation_id:CalculatorResults")
+
+    def test_unknown_verb_is_dropped_not_forwarded(self):
+        # The allowlist must drop a hallucinated verb the client has no handler for.
+        d = brain._parse_decision(
+            '{"actions": [{"type": "teleport", "value": "moon"},'
+            '{"type": "press", "value": "enter"}], "done": false}',
+            allow_coords=False)
+        self.assertEqual([a["type"] for a in d["actions"]], ["press"])
+
+    def test_extract_prompt_rule_is_present(self):
+        # The brain must be told how/when to use extract (Wave 2.3 read-back).
+        sp = brain._system_prompt(frozenset(), None)
+        self.assertIn("extract", sp)
+        self.assertIn("automation_id", sp)  # the tree-invisible targeting mode
+
 
 class RetryTests(unittest.TestCase):
     def test_clean_reply_never_retries(self):

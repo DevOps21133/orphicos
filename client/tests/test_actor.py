@@ -11,7 +11,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from client.act import ActionError, Actor
-from client.tests.fakes import FakeDesktop
+from client.tests.fakes import (FakeControl, FakeDesktop, FakeNode, FakeTextPattern,
+                                FakeValuePattern)
 
 # The client's side of the server action contract (server/brain.py ALLOWED_ACTIONS).
 # Kept explicit here so a drift between server verbs and client handlers fails a test.
@@ -19,6 +20,7 @@ EXPECTED_VERBS = (
     "launch", "click", "double_click", "right_click",
     "type", "press", "scroll", "focus_window", "wait", "wait_for",
     "set_clipboard", "open_path", "screenshot", "read_document", "list_dir",
+    "extract",
 )
 
 
@@ -656,6 +658,107 @@ class LongTextPasteTests(unittest.TestCase):
                                 "value": "short"})
         put.assert_not_called()
         self.assertIn(("type", (100, 200), "short"), self.desktop.calls)
+
+
+class ExtractTests(unittest.TestCase):
+    """The `extract` verb (Wave 2.3): read a control's current value via the UI
+    Value/Text patterns. Tests the resolution + pattern-reading logic against
+    FakeControl stubs (CLAUDE.md Rule 14) — no live desktop."""
+
+    def _desktop_with_node(self, node: FakeNode) -> FakeDesktop:
+        """A FakeDesktop whose active window's tree holds one node (with its .control)."""
+        desktop = FakeDesktop(active_window="App")
+        desktop.desktop_state.tree_state.interactive_nodes = [node]
+        return desktop
+
+    def test_reads_value_via_value_pattern(self):
+        # The common case: a named field whose current value isn't shown in the tree.
+        node = FakeNode("Total", control=FakeControl(value_pattern=FakeValuePattern("4371")))
+        actor = Actor(self._desktop_with_node(node))
+        result = actor.execute({"type": "extract", "target_selector": "Total"})
+        self.assertIn("4371", result)
+
+    def test_falls_back_to_text_pattern_when_no_value(self):
+        # A Document/Text control has no ValuePattern but exposes TextPattern.GetText.
+        node = FakeNode("Document body",
+                        control=FakeControl(text_pattern=FakeTextPattern("hello world")))
+        actor = Actor(self._desktop_with_node(node))
+        result = actor.execute({"type": "extract", "target_selector": "Document body"})
+        self.assertIn("hello world", result)
+
+    def test_value_pattern_takes_precedence_over_text_pattern(self):
+        # When both exist, Value is canonical (it's "what's in the field").
+        node = FakeNode("Field", control=FakeControl(
+            value_pattern=FakeValuePattern("the value"),
+            text_pattern=FakeTextPattern("the longer text")))
+        actor = Actor(self._desktop_with_node(node))
+        result = actor.execute({"type": "extract", "target_selector": "Field"})
+        self.assertIn("the value", result)
+        self.assertNotIn("the longer text", result)
+
+    def test_falls_back_to_control_name_when_no_patterns(self):
+        # A label-only control whose Name carries the value (some custom readouts).
+        node = FakeNode("x", control=FakeControl(name="Display is 42"))
+        actor = Actor(self._desktop_with_node(node))
+        result = actor.execute({"type": "extract", "target_selector": "x"})
+        self.assertIn("Display is 42", result)
+
+    def test_no_readable_value_raises_actionerror(self):
+        # A control supporting neither pattern AND with no Name -> honest failure,
+        # not a crash. The brain then re-plans (typically to the vision fallback).
+        node = FakeNode("Empty", control=FakeControl())
+        actor = Actor(self._desktop_with_node(node))
+        with self.assertRaises(ActionError) as ctx:
+            actor.execute({"type": "extract", "target_selector": "Empty"})
+        self.assertIn("no readable value", str(ctx.exception))
+
+    def test_node_without_control_raises(self):
+        # An interactive node that carries no live .control (windows-use didn't retain
+        # one) can't be read -> ActionError, not an AttributeError crash.
+        node = FakeNode("Stale")  # no control=
+        actor = Actor(self._desktop_with_node(node))
+        with self.assertRaises(ActionError):
+            actor.execute({"type": "extract", "target_selector": "Stale"})
+
+    def test_unknown_name_raises(self):
+        # A name that matches no interactive node -> ActionError, not None deref.
+        actor = Actor(self._desktop_with_node(FakeNode("Total")))
+        with self.assertRaises(ActionError) as ctx:
+            actor.execute({"type": "extract", "target_selector": "nope"})
+        self.assertIn("no on-screen control", str(ctx.exception).lower())
+
+    def test_missing_target_raises(self):
+        actor = Actor(self._desktop_with_node(FakeNode("Total")))
+        with self.assertRaises(ActionError) as ctx:
+            actor.execute({"type": "extract"})
+        self.assertIn("target_selector", str(ctx.exception))
+
+    def test_by_automation_id_uses_findfirst_on_foreground(self):
+        # Mode 2: a tree-invisible control (Calculator's display) reached by its
+        # stable UIA AutomationId. Patches the uia window+FindFirst chain.
+        display = FakeControl(value_pattern=FakeValuePattern("4371"))
+        window = type("W", (), {"FindFirst": lambda self_, scope, cond: display})()
+        with patch("client.act.actor.uia.GetForegroundControl", return_value=window):
+            actor = Actor(FakeDesktop(active_window="Calculator"))
+            result = actor.execute({"type": "extract",
+                                    "value": "automation_id:CalculatorResults"})
+        self.assertIn("4371", result)
+
+    def test_by_automation_id_not_found_raises(self):
+        # FindFirst returns None when no descendant carries that AutomationId.
+        window = type("W", (), {"FindFirst": lambda self_, scope, cond: None})()
+        with patch("client.act.actor.uia.GetForegroundControl", return_value=window):
+            actor = Actor(FakeDesktop(active_window="Calculator"))
+            with self.assertRaises(ActionError) as ctx:
+                actor.execute({"type": "extract",
+                               "value": "automation_id:Nope"})
+            self.assertIn("no on-screen control", str(ctx.exception).lower())
+
+    def test_empty_automation_id_raises(self):
+        actor = Actor(FakeDesktop(active_window="App"))
+        with self.assertRaises(ActionError) as ctx:
+            actor.execute({"type": "extract", "value": "automation_id:"})
+        self.assertIn("automation_id", str(ctx.exception).lower())
 
 
 if __name__ == "__main__":

@@ -36,7 +36,7 @@ _WAIT_WAIVERS = 3       # pure-wait steps that don't consume the max_steps budge
 # must read in full (a PDF's text, a folder listing) — they get a far larger cap.
 # The document reader already bounds its own text, so this is just a backstop.
 _RESULT_CAP = 80
-_CONTENT_ACTIONS = frozenset({"read_document", "list_dir"})
+_CONTENT_ACTIONS = frozenset({"read_document", "list_dir", "extract"})
 _CONTENT_RESULT_CAP = 6000
 
 # Re-reading a document or re-listing a folder already gathered this run is the
@@ -46,7 +46,7 @@ _CONTENT_RESULT_CAP = 6000
 # of redundant ones are harmless — but past this budget the run is looping, and we stop
 # it rather than let it re-type over a half-filled sheet forever (exactly the runaway
 # the kill switch exists for). Enforced in the client, not trusted to the brain prompt.
-_GATHER_ACTIONS = frozenset({"read_document", "list_dir"})
+_GATHER_ACTIONS = frozenset({"read_document", "list_dir", "extract"})
 _STUCK_REGATHER_LIMIT = 3
 
 # Wave 2 backstop: a question COMMAND (read/tell me/what/which…) that finishes

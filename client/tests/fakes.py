@@ -15,17 +15,52 @@ class FakeCenter:
         self.y = y
 
 
+class FakeControl:
+    """TEST FIXTURE ONLY (Rule 14): stands in for a live UIA Control so the Actor's
+    `extract` verb can be tested without a desktop. Mimics the subset of Control the
+    pattern-reading path touches: GetPattern(pattern_id) -> a stub pattern or None,
+    plus the .Name fallback. The Actor's _read_control_value queries ValuePattern
+    (10002) and TextPattern (10014) by their PatternId ints."""
+
+    def __init__(self, value_pattern=None, text_pattern=None, name: str = "") -> None:
+        self._patterns = {}  # PatternId int -> stub pattern object
+        if value_pattern is not None:
+            self._patterns[10002] = value_pattern
+        if text_pattern is not None:
+            self._patterns[10014] = text_pattern
+        self.Name = name
+
+    def GetPattern(self, pattern_id: int):
+        return self._patterns.get(pattern_id)
+
+
+class FakeValuePattern:
+    """Stub for uia ValuePattern — exposes .Value."""
+    def __init__(self, value: str) -> None:
+        self.Value = value
+
+
+class FakeTextPattern:
+    """Stub for uia TextPattern — exposes .DocumentRange.GetText."""
+    def __init__(self, text: str) -> None:
+        self.DocumentRange = type("Range", (), {"GetText": lambda self_, n=-1: text})()
+
+
 class FakeNode:
     """Stands in for a windows-use TreeElementNode/ScrollElementNode."""
 
     def __init__(self, name: str, control_type: str = "ButtonControl",
                  window_name: str = "Test Window", metadata: dict | None = None,
-                 center: FakeCenter | None = None) -> None:
+                 center: FakeCenter | None = None,
+                 control: "FakeControl | None" = None) -> None:
         self.name = name
         self.control_type = control_type
         self.window_name = window_name
         self.metadata = metadata or {}
         self.center = center or FakeCenter()
+        # The live UIA Control windows-use retains on a TreeElementNode; the `extract`
+        # verb reads its Value/Text pattern. None for nodes that carry no control.
+        self.control = control
 
 
 class FakeTextNode:

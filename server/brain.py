@@ -30,6 +30,7 @@ ALLOWED_ACTIONS = (
     "launch", "click", "double_click", "right_click",
     "type", "press", "scroll", "focus_window", "wait", "wait_for",
     "set_clipboard", "open_path", "screenshot", "read_document", "list_dir",
+    "extract",
 )
 
 _SYSTEM_PROMPT = """You are the OrphicOS engine: the decision cortex that drives a Windows 11 desktop.
@@ -54,7 +55,7 @@ Return ONLY a JSON object (no prose, no markdown) with this exact shape:
 
 Rules:
 - Allowed "type" verbs: launch, click, double_click, right_click, type, press, scroll, focus_window, wait,
-  wait_for, set_clipboard, open_path, screenshot, read_document, list_dir.
+  wait_for, set_clipboard, open_path, screenshot, read_document, list_dir, extract.
 - PREFER acting on named tree elements: put the element's Name in "target_selector" and leave "coords" null.
 - Use "coords" ONLY when a screenshot is provided and no named element fits (canvas/custom-drawn UI).
 - A provided screenshot is annotated with numbered boxes; each number IS an element id from the tree above.
@@ -92,6 +93,15 @@ Rules:
   its RESULT lists the entry names. Prefer this over opening the folder in Explorer and reading a scrollable
   file list from the tree. Typical "go through the files in <folder>" flow: list_dir the folder, then
   read_document each matching file (batched in one plan), then act on the collected contents.
+- To read a control's current VALUE that the tree shows by NAME but not by value (a result/total, a selected
+  item, a computed cell, a read-only field), emit {"type":"extract","target_selector":"<the element name from
+  the tree>"}. The client reads the value via the UI Value/Text pattern and returns it as that action's RESULT,
+  which you read from STATE on your NEXT turn — the same gather-then-answer flow as read_document. Use this
+  INSTEAD of a screenshot whenever the element is named in the tree: it is exact, instant, and unambiguous.
+  For a result DISPLAY absent from the tree entirely (a canvas/custom-drawn readout like Calculator's), use
+  {"type":"extract","value":"automation_id:<id>"} — the well-known id for the Windows Calculator result is
+  "CalculatorResults". extract returns content into STATE, not the "answer" field: after it lands, answer the
+  user from STATE in your next turn.
 - When the COMMAND asks to capture/screenshot the screen, emit a single {"type":"screenshot"} action — the
   client captures and saves the image on the user's own machine. NEVER drive Snipping Tool or press
   "printscreen" for this. If a specific app should be in the shot, focus_window/launch it FIRST in the same

@@ -598,3 +598,112 @@ class Actor:
         if not names:
             return f"{path} is empty"
         return f"{path} contains {len(names)} entries: " + ", ".join(names)
+
+    def _do_extract(self, action: dict, value) -> str:
+        """Read a control's current VALUE via the UI Automation value/text patterns
+        (Wave 2.3). The interactive tree carries an element's NAME but not its current
+        content — a result display, a read-only total, a selected dropdown, a computed
+        cell. This reads that value straight from the control's ValuePattern (the
+        canonical UIA "what's in it") or TextPattern (longer document text), and
+        returns it as the action RESULT so the brain answers from STATE next turn.
+
+        Two targeting modes (the brain picks based on what it can see):
+          1. target_selector = a NAME from the tree -> resolve to that node's live
+             .control and read its pattern. The common case: a named field whose
+             value isn't shown.
+          2. value = "automation_id:<id>" -> reach a control ABSENT from the tree
+             (e.g. Calculator's canvas display, AutomationId "CalculatorResults")
+             via FindFirst on the foreground window. The brain can't see such a
+             control's name, but it can know its stable AutomationId.
+
+        Honest degradation: a control supporting neither pattern raises ActionError
+        ("no readable value") so the brain re-plans — typically to the vision
+        fallback, which already works. Never crashes, never guesses."""
+        sel = str(action.get("target_selector") or "").strip()
+        raw_val = str(value or "").strip()
+        control = None
+        target_desc = ""  # a short label for the result line
+        if raw_val.lower().startswith("automation_id:"):
+            # Mode 2: a tree-invisible control reached by its stable UIA id.
+            auto_id = raw_val.split(":", 1)[1].strip()
+            if not auto_id:
+                raise ActionError("extract value 'automation_id:' needs an id after the colon")
+            control = self._find_by_automation_id(auto_id)
+            target_desc = f"automation_id:{auto_id}"
+        elif sel:
+            # Mode 1: a named element from the tree -> its live control.
+            control = self._control_for_selector(sel)
+            target_desc = sel
+        else:
+            raise ActionError("extract needs a target_selector (an element name from the "
+                              "tree) or value='automation_id:<id>'")
+        if control is None:
+            raise ActionError(f"no on-screen control matches {target_desc!r}")
+        text = self._read_control_value(control)
+        if text is None:
+            raise ActionError(f"{target_desc} exposes no readable value "
+                              "(no UI Value or Text pattern)")
+        return f"{target_desc} value: {text}"
+
+    def _control_for_selector(self, sel: str):
+        """Resolve a tree NAME to its live UIA Control (or None). The Actor's
+        _label_for already maps names to interactive-node indices; the node's
+        `.control` is the live Control windows-use retained at perceive time."""
+        label = self._label_for(sel)
+        if label is None:
+            return None
+        state = self._desktop.desktop_state
+        nodes = (state.tree_state.interactive_nodes or []) if state and state.tree_state else []
+        if 0 <= label < len(nodes):
+            return getattr(nodes[label], "control", None)
+        return None
+
+    def _find_by_automation_id(self, auto_id: str):
+        """Reach a tree-invisible control via FindFirst on the foreground window —
+        for canvas/custom-drawn displays (Calculator's result) that the tree never
+        emits. Returns the Control or None; never raises (a missing control becomes
+        an honest ActionError in _do_extract)."""
+        try:
+            window = uia.GetForegroundControl()
+            if window is None:
+                return None
+            cond = uia.CreatePropertyCondition(
+                uia.PropertyId.AutomationIdProperty, auto_id)
+            return window.FindFirst(uia.TreeScope.TreeScope_Descendants, cond)
+        except Exception:  # noqa: BLE001 — a COM/UIA failure means "not found"
+            return None
+
+    def _read_control_value(self, control) -> str | None:
+        """Read a control's current text: ValuePattern.Value first (the canonical
+        "what's in this field"), then TextPattern.DocumentRange.GetText (richer
+        document text), then the cached Name as a last resort. Returns None when
+        the control exposes no readable value at all."""
+        # ValuePattern — covers Edit/Calculator-result/Slider/combobox-value.
+        try:
+            vp = control.GetPattern(uia.PatternId.ValuePattern)
+            if vp is not None:
+                val = getattr(vp, "Value", None)
+                if val is not None and str(val).strip():
+                    return str(val).strip()
+        except Exception:  # noqa: BLE001 — control revoked mid-read, or pattern unsupported
+            pass
+        # TextPattern — covers Document/Text blocks (longer body text).
+        try:
+            tp = control.GetPattern(uia.PatternId.TextPattern)
+            if tp is not None:
+                doc_range = getattr(tp, "DocumentRange", None)
+                if doc_range is not None:
+                    text = doc_range.GetText(-1)
+                    if text and str(text).strip():
+                        return str(text).strip()
+        except Exception:  # noqa: BLE001
+            pass
+        # Cached Name — a label-only control whose Name carries the value (some
+        # custom readouts). Better than nothing; None if even this is empty.
+        try:
+            name = getattr(control, "Name", None)
+            if name is not None and str(name).strip():
+                return str(name).strip()
+        except Exception:  # noqa: BLE001
+            pass
+        return None
