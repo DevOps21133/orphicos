@@ -194,6 +194,14 @@ class AnswerFieldTests(unittest.TestCase):
         self.assertIn("answer", d)
         self.assertIsNone(d["answer"])
 
+    def test_prompt_forbids_silent_done_on_unanswered_question(self):
+        # The Calculator bug: the brain must NOT end a question done=true with a
+        # null answer. The system prompt must tell it to recover (request a
+        # screenshot or answer honestly) instead of giving up silently.
+        sp = brain._system_prompt(frozenset(), None)
+        self.assertIn("NEVER silently end such a question", sp)
+        self.assertIn("need_screenshot", sp)  # the recovery path is named
+
 
 if __name__ == "__main__":
     unittest.main()

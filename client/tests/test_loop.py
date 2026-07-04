@@ -11,12 +11,42 @@ from pathlib import Path
 from unittest.mock import patch
 
 from client.loop import (_DECIDE_RETRIES, _EMPTY_TOLERANCE, _STUCK_REGATHER_LIMIT,
-                         run_command)
+                         _looks_like_question, run_command)
 from client.net import BrainError
 from client.tests.fakes import FakeBrain, FakeDesktop
 
 LAUNCH = {"type": "launch", "value": "notepad"}
 WAIT0 = {"type": "wait", "value": "0"}
+
+
+class LooksLikeQuestionTest(unittest.TestCase):
+    """The Wave 2 backstop heuristic: tight enough to skip doing-commands, loose
+    enough to catch the question forms a user actually types."""
+
+    def test_wh_question_openers_detected(self):
+        for c in ("What is the total?", "which file is selected",
+                  "how many rows are there", "who is signed in"):
+            self.assertTrue(_looks_like_question(c), c)
+
+    def test_read_tell_show_me_detected(self):
+        for c in ("read me the error message", "tell me what's on screen",
+                  "show me the active cell"):
+            self.assertTrue(_looks_like_question(c), c)
+
+    def test_question_mark_alone_counts(self):
+        # Even an unusual phrasing ending in ? is treated as a question.
+        self.assertTrue(_looks_like_question("the total in A6?"))
+
+    def test_doing_commands_not_questions(self):
+        # The critical negative: these must NOT trigger the backstop.
+        for c in ("open notepad and type hello", "save the file to desktop",
+                  "create a folder named test", "send the email to Alex",
+                  "put 1 to 5 in column A and sum them"):
+            self.assertFalse(_looks_like_question(c), c)
+
+    def test_empty_command_is_safe(self):
+        self.assertFalse(_looks_like_question(""))
+        self.assertFalse(_looks_like_question("   "))
 
 
 def _decision(actions, done, summary="step"):
@@ -29,8 +59,9 @@ class ControlFlowTests(unittest.TestCase):
         self._sleep_patch.start()
         self.addCleanup(self._sleep_patch.stop)
 
-    def _run(self, desktop, brain, max_steps=5, on_event=lambda e: None):
-        return run_command("do a thing", desktop, brain, max_steps, on_event)
+    def _run(self, desktop, brain, max_steps=5, on_event=lambda e: None,
+             command: str = "do a thing"):
+        return run_command(command, desktop, brain, max_steps, on_event)
 
     def test_done_on_first_step(self):
         # active_window is the empty desktop, so "launch notepad" is a real launch
@@ -89,6 +120,57 @@ class ControlFlowTests(unittest.TestCase):
         events = []
         self._run(desktop, brain, on_event=events.append)
         self.assertNotIn("answer", events[0])
+
+    def test_unanswered_question_gets_honest_backstop(self):
+        # The Wave 2 net: the brain ends a question "done" with NO answer and NO
+        # actions (it gave up — the Calculator-display failure). The loop must not
+        # let it finish silently; it injects an honest "couldn't read that" reply.
+        desktop = FakeDesktop(node_names=["Equals"], active_window="Calculator")
+        brain = FakeBrain([_decision([], done=True, summary="need a screenshot to read it")])
+        events = []
+        outcome = self._run(desktop, brain, on_event=events.append,
+                            command="what is the calculator showing?")
+        self.assertEqual(outcome, "done")
+        # The brain's empty step is event[0]; the backstop reply is the final event.
+        self.assertTrue(any(e.get("answer") for e in events),
+                        "an unanswered question must get a backstop answer")
+        final = events[-1]
+        self.assertIn("couldn't read", final["answer"].lower())
+        self.assertTrue(final["done"])
+
+    def test_backstop_not_added_when_brain_answered(self):
+        # If the brain DID answer, the backstop stays quiet — no duplicate reply.
+        desktop = FakeDesktop(node_names=["Save"], active_window="App")
+        answered = _decision([], done=True, summary="read it")
+        answered["answer"] = "The total is $42.50."
+        brain = FakeBrain([answered])
+        events = []
+        self._run(desktop, brain, on_event=events.append,
+                  command="what is the total?")
+        answers = [e for e in events if e.get("answer")]
+        self.assertEqual(len(answers), 1)  # the brain's, not a second backstop
+        self.assertEqual(answers[0]["answer"], "The total is $42.50.")
+
+    def test_backstop_not_added_for_doing_command(self):
+        # A doing-command ("open notepad") correctly ends done with no answer —
+        # the backstop must not mistake it for an unanswered question.
+        desktop = FakeDesktop(node_names=["Save"], active_window="Desktop")
+        brain = FakeBrain([_decision([LAUNCH], done=True)])
+        events = []
+        self._run(desktop, brain, on_event=events.append,
+                  command="open notepad and type hello")
+        self.assertFalse(any(e.get("answer") for e in events),
+                         "a doing-command must not get a backstop answer")
+
+    def test_backstop_fires_on_no_actions_terminal(self):
+        # A question the brain repeatedly can't answer (empty responses) bottoms out
+        # at "no_actions" — the backstop still owes the user an honest reply there.
+        desktop = FakeDesktop(node_names=["Save"], active_window="App")
+        brain = FakeBrain([_decision([], done=False)])  # always empty, never done
+        events = []
+        self._run(desktop, brain, max_steps=8, on_event=events.append,
+                  command="read me the error message")
+        self.assertTrue(any(e.get("answer") for e in events))
 
     def test_multi_step_until_done(self):
         desktop = FakeDesktop(node_names=["Save"], active_window="Book1 - Excel")

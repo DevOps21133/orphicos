@@ -49,6 +49,35 @@ _CONTENT_RESULT_CAP = 6000
 _GATHER_ACTIONS = frozenset({"read_document", "list_dir"})
 _STUCK_REGATHER_LIMIT = 3
 
+# Wave 2 backstop: a question COMMAND (read/tell me/what/which…) that finishes
+# "done" with no answer, no actions, and no screenshot request is the silent-
+# failure signature — the brain couldn't read the value (a canvas/custom-drawn
+# control like Calculator's display) and gave up instead of recovering. The
+# ANSWERING prompt rule should make the brain request vision or answer honestly;
+# this is the deterministic net that catches it if the brain still misfires. It
+# never fires for a DOING command (open/type/save…), which correctly ends done
+# with no answer. Conservative on purpose: a miss just means no backstop (safe).
+_QUESTION_OPENERS = ("what", "which", "how many", "how much", "who", "whose", "where",
+                     "read me", "tell me", "show me", "what's", "whats", "where's")
+_QUESTION_WORDS = ("what", "which", "how many", "how much", "whose", "who is",
+                   "where is", "read me", "tell me", "show me")
+_UNANSWERED_REPLY = ("I couldn't read that from the screen — the value isn't exposed to "
+                     "the UI tree. Try rephrasing, or I can take a screenshot to see it.")
+
+
+def _looks_like_question(command: str) -> bool:
+    """Heuristic: does this command ASK for on-screen content (vs. DO something)?
+
+    Tight by design — false negatives merely skip the backstop (safe), while false
+    positives would over-answer doing-commands. So we require a clear question
+    signal: a wh/tell-me/read-me opener, or a question mark."""
+    c = command.strip().lower()
+    if not c:
+        return False
+    if c.endswith("?"):
+        return True
+    return any(c.startswith(w + " ") for w in _QUESTION_OPENERS) or any(w in c for w in _QUESTION_WORDS)
+
 
 def _clip_result(result, atype: str | None) -> str:
     cap = _CONTENT_RESULT_CAP if atype in _CONTENT_ACTIONS else _RESULT_CAP
@@ -89,6 +118,17 @@ def run_command(
     steps_used = 0
     step = 0  # monotonic step label for events/history (waived steps still count up)
     wait_waivers = _WAIT_WAIVERS
+    is_question = _looks_like_question(command)  # Wave 2 backstop eligibility
+    answered = False  # has the brain emitted ANY answer this run?
+
+    def _backstop_unanswered() -> None:
+        """The Wave 2 net: a question ending with no answer gets an honest one,
+        so the run can never finish 'done' while silently ignoring the user.
+        Only fires for questions that did nothing (no actions) and got no answer."""
+        if is_question and not answered:
+            on_event({"step": step, "reasoning": "", "used_vision": False,
+                      "actions": [], "done": True, "answer": _UNANSWERED_REPLY,
+                      "timings": {}})
 
     while steps_used < max_steps:
         step += 1
@@ -219,6 +259,7 @@ def run_command(
             # into history/STATE (an answer is not an action; STATE stays compact,
             # and a stale answer would mislead the next plan).
             event["answer"] = str(decision["answer"])
+            answered = True  # the backstop only fires if NO answer ever arrived
         if decision.get("remembered"):
             # Facts the user asked to save this turn — the shell shows a "🧠 Remembered"
             # note so saving is always visible (never silent profiling, Stage-1 consent).
@@ -240,12 +281,18 @@ def run_command(
         if stopped:
             return "stopped"
         if done:
+            # Wave 2 backstop: a question that ends "done" with no answer and no
+            # actions was silently ignored — give the user an honest reply instead.
+            if is_question and not answered and not results:
+                _backstop_unanswered()
             return "done"
         if actions:
             consecutive_empty = 0
         else:
             consecutive_empty += 1
             if consecutive_empty > _EMPTY_TOLERANCE:  # repeatedly nothing proposed -> give up
+                # Same net as above: a question the brain gave up on is still answered.
+                _backstop_unanswered()
                 return "no_actions"                   # (a single empty response is tolerated)
         # A pure-wait step spent time, not budget: waive a few so waiting out a
         # long operation (install, download) can't eat the whole run, while a
@@ -256,4 +303,7 @@ def run_command(
             steps_used += 1
         sleep(_SETTLE_SECONDS)
 
+    # Wave 2 backstop: a question that ran out of steps without answering still
+    # gets an honest reply — the worst outcome is a silent "max steps" on a question.
+    _backstop_unanswered()
     return "max_steps"
