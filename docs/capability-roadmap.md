@@ -75,8 +75,17 @@ rule to `reasoning_summary` only, never logged (Rule 4). 2.3 and 2.4 remain open
 |---|---|---|---|
 | 2.1 | Serialize `dom_informative_nodes` as a capped `TEXT:` section of the payload | perception | ✅ done |
 | 2.2 | Add `answer` field to the decision contract, rendered + spoken in the shell (scope the no-echo rule to `reasoning_summary` only). Zero-retention unchanged: answer passes through, never stored | contract | ✅ done |
-| 2.3 | `extract` verb: return a target subtree's text via UIA TextPattern/ValuePattern into STATE | code | open |
+| 2.3 | `extract` verb: return a target subtree's text via UIA TextPattern/ValuePattern into STATE | code | ✅ done |
 | 2.4 | Multi-monitor vision fix: capture active monitor only, translate returned coords by its offset | code | open |
+
+**2.3 detail:** `extract` reads a control's current value via UIA patterns
+(ValuePattern → TextPattern → cached Name). Two targeting modes: by tree name
+(`target_selector`) for named fields whose value isn't shown, and by AutomationId
+(`value='automation_id:<id>'`) for tree-invisible canvas displays like Calculator's
+result readout (`CalculatorResults`). Returns the text as the action RESULT into
+STATE — the same gather-then-answer flow as `read_document`. Closes the gap where
+the clock test proved tree-reading works but Calculator's canvas display could
+only be reached via the slower, ambiguous vision fallback. Committed `fc456da`.
 
 ### Wave 3 — Interaction completeness (S–M)
 
