@@ -13,7 +13,7 @@ from unittest.mock import patch
 from client.loop import (_DECIDE_RETRIES, _EMPTY_TOLERANCE, _STUCK_REGATHER_LIMIT,
                          _looks_like_question, run_command)
 from client.net import BrainError
-from client.tests.fakes import FakeBrain, FakeDesktop
+from client.tests.fakes import FakeBrain, FakeControl, FakeDesktop, FakeNode
 
 LAUNCH = {"type": "launch", "value": "notepad"}
 WAIT0 = {"type": "wait", "value": "0"}
@@ -299,6 +299,42 @@ class ControlFlowTests(unittest.TestCase):
         self.assertEqual(failure["plan_actions_dropped"], 2)
         # The failure is reported once, then cleared.
         self.assertEqual(len(brain.seen), 2)
+
+    def test_disabled_target_aborts_batch_and_triggers_replan(self):
+        # Wave 4.2: a target that resolved at perceive time but is DISABLED at act
+        # time must FAIL before the side effect, abort the rest of the batch, and
+        # cause exactly one re-plan — the same contract as an unresolvable target,
+        # but for the resolved-but-not-interactive case. Critically, the healthy
+        # "Save" later in the SAME batch is NOT clicked this round: we don't click
+        # past a dead button into the wrong follow-up.
+        desktop = FakeDesktop(active_window="App")
+        # "OK" resolves but is disabled; "Save" is healthy. Both carry a live control.
+        ok = FakeNode("OK", control=FakeControl(is_enabled=False))
+        save = FakeNode("Save", control=FakeControl(is_enabled=True))
+        desktop.desktop_state.tree_state.interactive_nodes = [ok, save]
+        brain = FakeBrain([
+            _decision([{"type": "click", "target_selector": "OK"},
+                       {"type": "click", "target_selector": "Save"},
+                       WAIT0], done=True),
+            _decision([WAIT0], done=True),
+        ])
+        events = []
+        outcome = self._run(desktop, brain, on_event=events.append)
+        self.assertEqual(outcome, "done")
+        self.assertEqual(len(brain.seen), 2)  # failed batch + exactly one re-plan
+        # Only the disabled action was attempted; the batch aborted before "Save".
+        self.assertEqual(len(events[0]["actions"]), 1)
+        self.assertTrue(events[0]["actions"][0]["result"].startswith("FAILED"))
+        self.assertIn("disabled", events[0]["actions"][0]["result"].lower())
+        # Neither click fired — pre-flight refused before any side effect.
+        self.assertFalse(any(c[0] == "click" for c in desktop.calls))
+        # The re-plan call carries the failure; the first call does not.
+        self.assertNotIn("failed_action", brain.seen[0]["state"])
+        failure = brain.seen[1]["state"]["failed_action"]
+        self.assertEqual(failure["action"]["type"], "click")
+        self.assertEqual(failure["action"]["target"], "OK")
+        self.assertIn("disabled", failure["error"].lower())
+        self.assertEqual(failure["plan_actions_dropped"], 2)
 
     def test_batch_executes_in_order_without_extra_brain_calls(self):
         desktop = FakeDesktop(node_names=["Save", "Close"], active_window="App")

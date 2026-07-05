@@ -761,5 +761,127 @@ class ExtractTests(unittest.TestCase):
         self.assertIn("automation_id", str(ctx.exception).lower())
 
 
+class PreflightTests(unittest.TestCase):
+    """Wave 4.2 — per-action pre-flight validation. A target that resolved at
+    perceive time but is no longer interactive (disabled / offscreen / gone) must
+    FAIL the action before any side effect, never silently misclick. These are
+    unit-level checks against FakeControl stubs; the loop-level re-plan contract
+    is covered by test_loop.PreFlightIntegrationTests."""
+
+    def _desktop_with_node(self, node: FakeNode) -> FakeDesktop:
+        desktop = FakeDesktop(active_window="App")
+        desktop.desktop_state.tree_state.interactive_nodes = [node]
+        return desktop
+
+    def _click_actor(self, control: FakeControl) -> tuple[Actor, FakeDesktop]:
+        desktop = self._desktop_with_node(FakeNode("OK", control=control))
+        return Actor(desktop), desktop
+
+    def test_disabled_target_aborts_before_click(self):
+        # The element is in the tree (resolution succeeds) but its live control
+        # reports IsEnabled=False — a grayed-out OK. Pre-flight must refuse it.
+        actor, desktop = self._click_actor(FakeControl(is_enabled=False))
+        with self.assertRaises(ActionError) as ctx:
+            actor.execute({"type": "click", "target_selector": "OK"})
+        self.assertIn("disabled", str(ctx.exception).lower())
+        self.assertFalse(any(c[0] == "click" for c in desktop.calls))
+
+    def test_offscreen_target_aborts_before_click(self):
+        # Resolved, but offscreen — the dialog was dismissed or scrolled away. The
+        # stale coords would land on whatever moved into its place.
+        actor, desktop = self._click_actor(FakeControl(is_offscreen=True))
+        with self.assertRaises(ActionError) as ctx:
+            actor.execute({"type": "click", "target_selector": "OK"})
+        self.assertIn("offscreen", str(ctx.exception).lower())
+        self.assertFalse(any(c[0] == "click" for c in desktop.calls))
+
+    def test_double_click_and_right_click_also_preflighted(self):
+        # The whole click family is in _PREFLIGHT_VERBS, not just click.
+        for verb in ("double_click", "right_click"):
+            with self.subTest(verb=verb):
+                actor, desktop = self._click_actor(FakeControl(is_enabled=False))
+                with self.assertRaises(ActionError):
+                    actor.execute({"type": verb, "target_selector": "OK"})
+                self.assertFalse(any(c[0] == "click" for c in desktop.calls))
+
+    def test_stale_control_property_read_becomes_actionerror(self):
+        # A control whose UIA property access raises (comtypes.COMError on a dead
+        # element) must surface as an ActionError via execute()'s broad except,
+        # never crash the run. Built as a stand-alone stub so the raising property
+        # isn't shadowed by FakeControl.__init__'s instance attribute assignment.
+        class _StaleControl:
+            IsOffscreen = False
+            @property
+            def IsEnabled(self):
+                raise RuntimeError("UIA_E_ELEMENTNOTAVAILABLE")
+            def GetPattern(self, _pid):
+                return None
+        node = FakeNode("OK", control=_StaleControl())
+        desktop = FakeDesktop(active_window="App")
+        desktop.desktop_state.tree_state.interactive_nodes = [node]
+        actor = Actor(desktop)
+        with self.assertRaises(ActionError) as ctx:
+            actor.execute({"type": "click", "target_selector": "OK"})
+        # execute()'s broad-except wraps foreign exceptions as "click failed: ...".
+        self.assertIn("click failed", str(ctx.exception).lower())
+        self.assertFalse(any(c[0] == "click" for c in desktop.calls))
+
+    def test_healthy_control_clicks_normally(self):
+        # Regression guard: a normal enabled+onscreen control must pass pre-flight
+        # and fire the click unchanged.
+        actor, desktop = self._click_actor(FakeControl(is_enabled=True, is_offscreen=False))
+        result = actor.execute({"type": "click", "target_selector": "OK"})
+        self.assertIn("clicked", result)
+        self.assertTrue(any(c[0] == "click" for c in desktop.calls))
+
+    def test_raw_coord_click_skips_preflight(self):
+        # No target_selector -> no live element to validate. The brain named a
+        # screen point; pre-flight stays out of the way (nothing to check).
+        desktop = FakeDesktop(node_names=["OK"], active_window="App")
+        actor = Actor(desktop)
+        # No FakeControl in the tree; resolution-by-coords must still work, and
+        # pre-flight must not try to read IsEnabled on a missing control.
+        result = actor.execute({"type": "click", "coords": [123, 456]})
+        self.assertIn("clicked", result)
+        self.assertTrue(any(c[0] == "click" for c in desktop.calls))
+
+    def test_targetless_type_skips_preflight(self):
+        # type with no target goes to the focused control; pre-flight has no
+        # element to check and must not interfere (SendKeys patched out per the
+        # module docstring).
+        desktop = FakeDesktop(node_names=[], active_window="App")
+        actor = Actor(desktop)
+        with patch("client.act.actor.uia.SendKeys") as mock_send:
+            result = actor.execute({"type": "type", "value": "hello"})
+        self.assertIn("typed into focused", result)
+        mock_send.assert_called_once()
+
+    def test_scroll_exempt_from_preflight(self):
+        # scroll's contract is to NEVER raise — it degrades to the focused window
+        # when its target is gone. Pre-flight must not turn a resolved-but-disabled
+        # scroll pane into a hard ActionError that bypasses that degradation.
+        node = FakeNode("Document", control_type="PaneControl",
+                        control=FakeControl(is_enabled=False))
+        desktop = self._desktop_with_node(node)
+        actor = Actor(desktop)
+        result = actor.execute({"type": "scroll", "target_selector": "Document",
+                                "value": "down"})
+        self.assertIn("scrolled", result)
+        self.assertTrue(any(c[0] == "scroll" for c in desktop.calls))
+
+    def test_node_without_control_noops_preflight(self):
+        # Fixtures (and some tree branches) carry control=None. Pre-flight must
+        # no-op rather than raising AttributeError on None.IsEnabled — letting the
+        # handler's own resolution raise the canonical error instead.
+        desktop = FakeDesktop(node_names=["OK"], active_window="App")  # control=None
+        actor = Actor(desktop)
+        # In the fake, get_coordinates_from_label returns a fixed coord regardless
+        # of .control, so the click proceeds — proving pre-flight stayed out. The
+        # only thing that must NOT happen is an AttributeError leaking out.
+        result = actor.execute({"type": "click", "target_selector": "OK"})
+        self.assertIn("clicked", result)
+        self.assertTrue(any(c[0] == "click" for c in desktop.calls))
+
+
 if __name__ == "__main__":
     unittest.main()

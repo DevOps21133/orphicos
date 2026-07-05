@@ -157,6 +157,15 @@ def _looks_failed(result: str) -> bool:
     return any(marker in low for marker in _ACTION_FAILED_MARKERS)
 
 
+# Wave 4.2 — pre-flight validation. Strict-target verbs whose target element must
+# still be interactive (Enabled + on-screen) at ACT time, not just at perceive
+# time. scroll is deliberately excluded: its contract is to never raise (it
+# degrades to the focused window), and a pre-flight ActionError would bypass that
+# degradation. type is included but pre-flight self-disables when the action has
+# no target_selector (the "type into focused control" path has no element to check).
+_PREFLIGHT_VERBS = frozenset({"click", "double_click", "right_click", "type"})
+
+
 class ActionError(RuntimeError):
     """An action could not be executed (unknown type, or no matching element)."""
 
@@ -186,6 +195,7 @@ class Actor:
         if handler is None:
             raise ActionError(f"unsupported action type: {atype!r}")
         try:
+            self._preflight(action, atype)
             return handler(action, action.get("value"))
         except ActionError:
             raise
@@ -251,6 +261,46 @@ class Actor:
         if loc is None:
             raise ActionError("action needs a target element or coordinates")
         return loc
+
+    def _preflight(self, action: dict, atype: str) -> None:
+        """Wave 4.2 — verify the target is still interactive BEFORE the side effect.
+
+        The perceive→decide→act window is long enough (one brain round trip, plus
+        any earlier batched actions) that a control can be disabled (OK grayed out),
+        slide offscreen (dialog closed / scroll moved), or die (parent window gone)
+        between the snapshot the brain saw and the moment we act. Resolution alone
+        only proves the element was in the perceive-time tree; it does not prove it
+        is still clickable. A click at stale coords is a silent misclick onto the
+        wrong target — exactly the failure UFO2's pre-flight check cuts (-51.5% LLM
+        calls) by aborting the batch for a re-plan instead of acting on a dead element.
+
+        Scope is intentionally narrow (see _PREFLIGHT_VERBS):
+          - Only strict-target verbs: click family + type-with-a-target.
+          - Skipped when there is no target_selector (raw coords, or targetless
+            type-into-focus): nothing live to validate, and the handler's own
+            _require_loc will raise the right error if a selector was expected.
+          - scroll stays exempt by design (it must never raise).
+
+        Resolution reuses _control_for_selector (the same path `extract` uses), so
+        pre-flight adds no new resolution logic. A node with no .control attached
+        (test fixtures, or a tree branch that didn't retain one) makes this no-op:
+        the handler will fail with its own clear error, and we don't duplicate it.
+
+        Property reads on a stale control raise comtypes.COMError; the broad except
+        in `execute` already converts that into an ActionError, so we let it fly.
+        ActionError itself re-raises unchanged through that same path."""
+        if atype not in _PREFLIGHT_VERBS:
+            return
+        sel = action.get("target_selector")
+        if not sel:
+            return  # raw coords or targetless type — nothing to validate here
+        control = self._control_for_selector(str(sel))
+        if control is None:
+            return  # no live control attached; the handler's resolution will fail loudly
+        if not control.IsEnabled:
+            raise ActionError(f"target {sel!r} is disabled")
+        if control.IsOffscreen:
+            raise ActionError(f"target {sel!r} is offscreen")
 
     # --- action handlers ---------------------------------------------------
     def _do_launch(self, action: dict, value) -> str:

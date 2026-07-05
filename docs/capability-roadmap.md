@@ -100,16 +100,39 @@ only be reached via the slower, ambiguous vision fallback. Committed `fc456da`.
 
 ### Wave 4 — Robustness & speed (M–L)
 
-| # | Item | Field evidence |
-|---|---|---|
-| 4.1 | UIA pattern invocation first (Invoke/Toggle/SetValue/Select), mouse as fallback — immune to occlusion/animation; atomic field writes | pywinauto, UFO2 |
-| 4.2 | Pre-flight validation: before each queued action, verify target resolves + IsEnabled/IsVisible; early-exit *before* acting wrong → longer safe batches | UFO2: −51.5% LLM calls |
-| 4.3 | UAC/secure-desktop detection → pause loop + shell event "confirm the Windows security prompt" → resume. (UIAccess-signed binary is the long-term fix; deferred with code signing) | Windows security design |
-| 4.4 | Post-done validator: re-perceive and confirm the command is satisfied (only when a plan had failures — protects latency) | Skyvern: 45%→85.8% |
-| 4.5 | Server-side plan cache: store successful plans as metadata (command signature + app + actions — Rule-4 clean), inject as STATE hint on repeat commands | Skyvern/UFO2; attacks the #1 pain |
-| 4.6 | Electron a11y wake: on sparse tree in a Chromium-class window, send a UIA priming query, wait ~1 s, re-read once before vision fallback | Slack/Discord/Spotify are daily drivers |
-| 4.7 | Window-title list of ALL open apps in every payload (+ later `peek_window` for a named background tree) | multi-app tasks are blind today |
-| 4.8 | Brain-declared safety: optional `requires_confirmation: reason` per action, gated in the shell *in addition to* the regex (catches "empty the recycle bin") | OpenAI Operator protocol |
+✅ **4.2 SHIPPED (2026-07-05).** Per-action pre-flight: before each strict-target
+verb the actor verifies the resolved control is still `IsEnabled` and on-screen,
+and raises `ActionError` (→ abort batch → single re-plan) if not — closing the
+hole where a control disabled/dismissed between perceive and act was clicked at
+stale coords onto whatever moved into its place. 4.1 and 4.3–4.8 remain open.
+
+| # | Item | Status | Field evidence |
+|---|---|---|---|
+| 4.1 | UIA pattern invocation first (Invoke/Toggle/SetValue/Select), mouse as fallback — immune to occlusion/animation; atomic field writes | open | pywinauto, UFO2 |
+| 4.2 | Pre-flight validation: before each queued action, verify target resolves + IsEnabled/IsVisible; early-exit *before* acting wrong → longer safe batches | ✅ done | UFO2: −51.5% LLM calls |
+| 4.3 | UAC/secure-desktop detection → pause loop + shell event "confirm the Windows security prompt" → resume. (UIAccess-signed binary is the long-term fix; deferred with code signing) | open | Windows security design |
+| 4.4 | Post-done validator: re-perceive and confirm the command is satisfied (only when a plan had failures — protects latency) | open | Skyvern: 45%→85.8% |
+| 4.5 | Server-side plan cache: store successful plans as metadata (command signature + app + actions — Rule-4 clean), inject as STATE hint on repeat commands | open | Skyvern/UFO2; attacks the #1 pain |
+| 4.6 | Electron a11y wake: on sparse tree in a Chromium-class window, send a UIA priming query, wait ~1 s, re-read once before vision fallback | open | Slack/Discord/Spotify are daily drivers |
+| 4.7 | Window-title list of ALL open apps in every payload (+ later `peek_window` for a named background tree) | open | multi-app tasks are blind today |
+| 4.8 | Brain-declared safety: optional `requires_confirmation: reason` per action, gated in the shell *in addition to* the regex (catches "empty the recycle bin") | open | OpenAI Operator protocol |
+
+**4.2 detail:** a new `Actor._preflight` runs before each handler for the strict-target
+verbs (`click`, `double_click`, `right_click`, and `type` when it carries a
+`target_selector`). It reuses the existing `_control_for_selector` path (the same
+one `extract` uses) to fetch the live `Control`, then reads its live
+`IsEnabled` / `IsOffscreen`. A disabled or offscreen target raises `ActionError`,
+which flows through the *existing* failure contract (`loop.py:218-233`: record
+`FAILED`, abort the rest of the batch, inject `failed_action` into the next
+state, exactly one re-plan) — no loop, brain, or server changes. Scope is
+deliberately narrow: `scroll` stays exempt (its contract is to never raise, only
+degrade to the focused window), raw-coord and targetless-type actions skip
+pre-flight (no element to validate), and a node carrying no `.control` no-ops
+(lets the handler's own resolution raise the canonical error). A stale control
+whose property access raises `comtypes.COMError` is converted to `ActionError`
+by `execute`'s existing broad-except — the same path stale-control clicks already
+took. This is the foundation that makes the longer safe batches of Wave 4.1 +
+`feat/batching` viable: a failed target now stops the plan instead of misclicking.
 
 ### Deliberately deferred
 

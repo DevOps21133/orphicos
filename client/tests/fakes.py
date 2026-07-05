@@ -20,15 +20,25 @@ class FakeControl:
     `extract` verb can be tested without a desktop. Mimics the subset of Control the
     pattern-reading path touches: GetPattern(pattern_id) -> a stub pattern or None,
     plus the .Name fallback. The Actor's _read_control_value queries ValuePattern
-    (10002) and TextPattern (10014) by their PatternId ints."""
+    (10002) and TextPattern (10014) by their PatternId ints.
 
-    def __init__(self, value_pattern=None, text_pattern=None, name: str = "") -> None:
+    `is_enabled` / `is_offscreen` model the live UIA properties the Wave 4.2
+    pre-flight reads (windows_use.uia.controls.Control.IsEnabled / .IsOffscreen).
+    Defaults preserve every pre-existing test (a healthy control)."""
+
+    def __init__(self, value_pattern=None, text_pattern=None, name: str = "",
+                 is_enabled: bool = True, is_offscreen: bool = False) -> None:
         self._patterns = {}  # PatternId int -> stub pattern object
         if value_pattern is not None:
             self._patterns[10002] = value_pattern
         if text_pattern is not None:
             self._patterns[10014] = text_pattern
         self.Name = name
+        # Live UIA properties read by Actor._preflight (Wave 4.2). Exposed as
+        # attributes (not properties) so a test can also stub them with a callable
+        # or override __getattribute__ to raise, modeling a stale COM control.
+        self.IsEnabled = is_enabled
+        self.IsOffscreen = is_offscreen
 
     def GetPattern(self, pattern_id: int):
         return self._patterns.get(pattern_id)
