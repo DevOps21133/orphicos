@@ -47,6 +47,54 @@ Dev/test host: Windows 11, Intel Core Ultra 9 285K, RTX 5090, 128GB RAM. Client 
 13. **DONE is per phase.** Don't start phase N+1 until phase N's DONE checklist passes and is committed.
 14. **PRODUCTION-READY ONLY — NO MOCK DATA.** Every deliverable is real, working code. No mock/fake/placeholder/dummy data, no stubbed or `pass`-only functions, no "TODO: implement later," no simulated responses standing in for real ones. Every product code path runs against the real thing: the real UIA tree, real action execution, real server calls, real screen capture. The ONLY exception is a fixture that exists purely to exercise a smoke/unit test — it must be clearly labeled as a test fixture and NEVER wired into a product path.
 
+### Accepted debt — Orphic Page Agent vs Rule 1
+
+`client/shell/static/orphic-page-agent.js` + the "🕸 Orphic Page Agent" panel integrate
+Alibaba's open-source [page-agent](https://github.com/alibaba/page-agent) (MIT) as an
+**opt-in** browser-side feature, branded "Orphic Page Agent." page-agent runs its OWN
+LLM reasoning loop in the browser, which formally clashes with Rule 1 (no
+LLM/provider/key in the client). The exception is deliberate and bounded:
+
+- **Off by default.** `OrphicPageAgent.isEnabled()` reads localStorage; the toggle ships
+  OFF. The default command path (local STT → command bar → OrphicOS brain over /ws) is
+  untouched unless the user explicitly turns Orphic Page Agent on.
+- **User-supplied key, browser-local only.** The provider + key live in the user's own
+  browser localStorage and go straight from the browser to the user's configured
+  endpoint. They are NEVER read by OrphicOS client Python, NEVER sent to OrphicOS
+  servers, and NEVER logged. The modal states this.
+- **Page scope is honest.** page-agent can drive only the page it's loaded into
+  (Same-Origin Policy). In the shell that means it operates the shell itself. The modal
+  says so; we do not market it as "control any website."
+- **The voice confirm gate still holds.** Voice only fills the bar (Phase 3); the human
+  presses Enter, which then routes to page-agent when the mode is on. Speech is never
+  auto-submitted.
+- **Kill switch covers it.** The STOP button calls `OrphicPageAgent.stop()` in addition
+  to the OrphicOS brain kill path.
+
+**Premium gating (Base Premium plan).** Orphic Page Agent is included in the paid Base
+Premium plan. The gate is tracked in `server/entitlements.py` (feature id
+`orphic_page_agent`) and surfaced to the shell via `GET /api/entitlements`, which the
+browser polls (fail-closed: any error reports the user as locked). The panel renders an
+upsell for locked users and the config body for entitled ones; `submit()` requires BOTH
+the local toggle AND a live server-confirmed entitlement before routing to page-agent.
+
+  ⚠ **UX-gating only — by design, not by accident.** This is the one place the
+  OrphicOS monetization model does NOT get crack-proof enforcement. Skills (gmail, excel)
+  are server-side prompt content: locked users' brains never receive the recipes, so
+  there is nothing in the shipped client to crack. Orphic Page Agent is different: it is
+  a client-side capability the user runs on their own machine, on their own provider
+  key — everything needed to run it ships in the client. So the entitlement check here
+  controls VISIBILITY/UX (hide the panel, block `submit()`) but cannot prevent a
+  determined user with devtools from calling `OrphicPageAgent.start()` directly. We gate
+  the UX honestly and document the limitation rather than pretend otherwise. If true
+  enforcement is ever required, move the secret server-side (which is what skills are
+  for) — do NOT tighten this check expecting it to bite.
+
+If a future rewrite moves the reasoning back to the OrphicOS brain (a true Rule 1
+bridge: page-agent's DOM perception/acting, our brain's `decide`), BOTH this debt AND
+the gating weakness can be retired at once — the feature would then be server-reasoned
+and gateable like any skill. Tracked in `docs/` capability roadmap.
+
 ---
 
 ## 3. REPO LAYOUT (create in Phase 0)

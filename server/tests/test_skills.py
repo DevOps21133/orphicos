@@ -84,6 +84,36 @@ class EntitlementTests(unittest.TestCase):
         entitlements._cache["mtime"] = None  # simulate a fresh process
         self.assertEqual(entitlements.unlocked(USER), frozenset({"excel"}))
 
+    def test_feature_grant_revoke_roundtrip(self):
+        # Features are tracked separately from skills (different threat model:
+        # UX-gating only — see entitlements docstring). Default: nothing unlocked.
+        self.assertEqual(entitlements.features(USER), frozenset())
+        self.assertFalse(entitlements.has_feature(USER, "orphic_page_agent"))
+
+        entitlements.grant_feature(USER, "orphic_page_agent")
+        entitlements.grant_feature(USER, "orphic_page_agent")  # idempotent
+        self.assertTrue(entitlements.has_feature(USER, "orphic_page_agent"))
+        self.assertEqual(entitlements.features(USER), frozenset({"orphic_page_agent"}))
+
+        # Skills and features don't bleed into each other's accessor.
+        entitlements.grant(USER, "gmail")
+        self.assertEqual(entitlements.unlocked(USER), frozenset({"gmail"}))
+        self.assertEqual(entitlements.features(USER), frozenset({"orphic_page_agent"}))
+
+        entitlements.revoke_feature(USER, "orphic_page_agent")
+        self.assertFalse(entitlements.has_feature(USER, "orphic_page_agent"))
+
+    def test_grant_feature_rejects_unknown_feature(self):
+        with self.assertRaises(ValueError):
+            entitlements.grant_feature(USER, "telepathy-not-built-yet")
+
+    def test_feature_catalog_lists_orphic_page_agent(self):
+        # The Base Premium perk must be in the registry for the shell to surface it.
+        self.assertIn("orphic_page_agent", entitlements.FEATURES)
+        meta = entitlements.FEATURES["orphic_page_agent"]
+        self.assertEqual(meta["title"], "Orphic Page Agent")
+        self.assertTrue(meta["checkout_path"])
+
 
 class PromptInjectionTests(unittest.TestCase):
     def test_locked_pack_contributes_no_expertise(self):
@@ -163,6 +193,35 @@ class GateTests(unittest.TestCase):
              patch("server.app.brain.decide", return_value=_decision(skill="excel")):
             r = self._command()
         self.assertEqual(r.json()["actions"][0]["value"], "https://store.test/skills/excel")
+
+    def test_entitlements_requires_auth(self):
+        r = self.client.get("/entitlements")
+        self.assertEqual(r.status_code, 401)
+
+    def test_entitlements_reports_features_and_catalog(self):
+        # An entitled user: feature shows up in `features` and the catalog exposes
+        # its checkout path so the shell can build the upgrade link.
+        entitlements.grant_feature(USER, "orphic_page_agent")
+        r = self.client.get("/entitlements",
+                            headers={"Authorization": f"Bearer {self.token}"})
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertIn("orphic_page_agent", body["features"])
+        catalog_ids = [f["id"] for f in body["feature_catalog"]]
+        self.assertIn("orphic_page_agent", catalog_ids)
+        # The catalog must NOT leak internal-only keys (plan, granted_*_at) — only
+        # the shape the shell renders from.
+        feat = next(f for f in body["feature_catalog"] if f["id"] == "orphic_page_agent")
+        self.assertEqual(set(feat), {"id", "title", "tagline", "checkout_path"})
+
+    def test_entitlements_for_locked_user_lists_no_features(self):
+        r = self.client.get("/entitlements",
+                            headers={"Authorization": f"Bearer {self.token}"})
+        body = r.json()
+        self.assertEqual(body["features"], [])
+        self.assertNotIn("orphic_page_agent", body["features"])
+        # Catalog still lists the feature (for the upsell) even when locked.
+        self.assertTrue(any(f["id"] == "orphic_page_agent" for f in body["feature_catalog"]))
 
 
 if __name__ == "__main__":

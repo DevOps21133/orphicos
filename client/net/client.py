@@ -85,6 +85,17 @@ class BrainClient:
         data = self._request("DELETE", "/memory")
         return int(data.get("removed", 0)) if isinstance(data, dict) else 0
 
+    # --- Entitlements: the shell's premium-feature visibility check proxies here.
+    # UX-gating only for client-side features (see server.entitlements docstring).
+    def entitlements(self) -> dict:
+        """The user's unlocked skills + features, and the feature catalog.
+
+        Returns {} on any failure so the shell treats the user as locked
+        (fail-closed: a premium feature shows as locked, never wrongly unlocked).
+        """
+        data = self._request("GET", "/entitlements")
+        return data if isinstance(data, dict) else {}
+
     def _request(self, method: str, path: str, json: Optional[dict] = None) -> Any:
         try:
             r = self._client.request(method, path, json=json)

@@ -265,3 +265,25 @@ def forget_one(item_id: str, user_id: str = Depends(current_user)) -> dict:
 def forget_all(user_id: str = Depends(current_user)) -> dict:
     """'Forget everything' — the one-confirm wipe. Server-authoritative, user-owned."""
     return {"ok": True, "removed": memory.wipe(user_id)}
+
+
+@app.get("/entitlements")
+def get_entitlements(user_id: str = Depends(current_user)) -> dict:
+    """The user's unlocked skills + features, plus feature metadata for the shell.
+
+    The shell uses this to decide which client-side premium features to surface
+    (currently Orphic Page Agent) and to render an upsell for locked ones. NOTE:
+    feature entitlements gate VISIBILITY/UX only — read server.entitlements's
+    threat-model docstring before assuming strong enforcement.
+    """
+    return {
+        "skills": sorted(entitlements.unlocked(user_id)),
+        "features": sorted(entitlements.features(user_id)),
+        # Full registry so the shell can render locked-feature upsells without
+        # hardcoding titles/paths; id+title+tagline+checkout_path per feature.
+        "feature_catalog": [
+            {"id": fid, **{k: v for k, v in meta.items()
+                           if k in ("id", "title", "tagline", "checkout_path")}}
+            for fid, meta in entitlements.FEATURES.items()
+        ],
+    }

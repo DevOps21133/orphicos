@@ -178,6 +178,21 @@
   .mem-foot { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; }
   .forget-all { background: transparent; color: var(--bad); border: 1px solid var(--bad); padding: 9px 16px; font-weight: 600; }
   .forget-all.armed { background: var(--bad); color: #2a0007; }
+
+  /* Orphic Page Agent config panel + mode indicator */
+  .opa-toggle { margin-bottom: 14px; }
+  .opa-fields { display: flex; flex-direction: column; gap: 10px; }
+  .opa-field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+  .opa-field input {
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+    color: var(--text); padding: 8px 10px; font: inherit; font-size: 13.5px; outline: none;
+    transition: border-color 0.2s;
+  }
+  .opa-field input:focus { border-color: var(--accent); }
+  .opa-status { color: var(--muted); font-size: 12.5px; flex: 1; align-self: center; }
+  .opa-status.ok { color: var(--good); }
+  .opa-status.err { color: var(--bad); }
+  #opaBtn.on { color: var(--accent); border-color: var(--accent); }
 </style>
 </head>
 <body>
@@ -187,6 +202,7 @@
       <span class="tagline">the machine works. You don't.</span>
     </div>
     <div class="hright">
+      <button class="hbtn" id="opaBtn" title="Orphic Page Agent — voice-driven web navigation (opt-in)">🕸 Orphic Page Agent</button>
       <button class="hbtn" id="memBtn" title="What OrphicOS remembers about you">🧠 Memory</button>
       <div id="pill" class="pill"><span class="dot"></span><span id="pillText">Connecting…</span></div>
     </div>
@@ -247,6 +263,72 @@
     </div>
   </div>
 
+  <!-- Orphic Page Agent: opt-in voice-driven web navigation (bridges to Alibaba page-agent, MIT).
+       A premium feature (Base Premium plan). Entitlement is checked server-side via
+       /api/entitlements; the panel renders either the config body (entitled) or an
+       upsell (locked). UX-gating only — see CLAUDE.md accepted-debt note. -->
+  <div class="overlay" id="opaOverlay">
+    <div class="modal mem" id="opaModal">
+      <div class="mem-head">
+        <h2>🕸 Orphic Page Agent</h2>
+        <button class="x" id="opaClose" title="Close">✕</button>
+      </div>
+
+      <!-- LOCKED upsell (premium not active): no toggle, no key field. -->
+      <div id="opaLocked" hidden>
+        <p class="mem-note">
+          <b>Orphic Page Agent</b> is part of the <b>OrphicOS Base Premium</b> plan —
+          voice/text-driven web navigation, right in the page. Upgrade to unlock it.
+        </p>
+        <div class="mem-foot">
+          <span class="opa-status">A premium feature.</span>
+          <a class="hbtn" id="opaUpgrade" href="#" target="_blank" rel="noopener">See plans</a>
+        </div>
+      </div>
+
+      <!-- UNLOCKED config (entitled user). -->
+      <div id="opaUnlocked" hidden>
+        <p class="mem-note">
+          Orphic Page Agent gives you voice/text-driven web navigation inside this
+          page. It bridges to the open-source
+          <a href="https://github.com/alibaba/page-agent" target="_blank" rel="noopener">page-agent</a>
+          library (MIT). <b>Opt-in:</b> off by default; OrphicOS's normal path
+          (local speech-to-text → the OrphicOS brain) is unchanged unless you turn this on.
+          <br><br>
+          page-agent runs its own reasoning loop <b>in your browser</b>, so it needs a
+          provider key you supply. The key stays in this browser's localStorage and is
+          never sent to OrphicOS servers.
+          <br><br>
+          <b>Scope:</b> page-agent can only drive the page it's loaded into. In the
+          OrphicOS shell that means it can operate the shell itself (e.g. "scroll the
+          log", "open memory", "press run"). Driving a third-party site requires loading
+          it there.
+        </p>
+        <div class="opa-toggle">
+          <label class="incog">
+            <input type="checkbox" id="opaEnable" />
+            <span>Enable Orphic Page Agent — route typed/voice commands to it instead of the OrphicOS brain</span>
+          </label>
+        </div>
+        <div class="opa-fields">
+          <label class="opa-field"><span>Provider</span>
+            <input id="opaProvider" type="text" placeholder="openai" /></label>
+          <label class="opa-field"><span>Base URL (optional)</span>
+            <input id="opaBaseURL" type="text" placeholder="https://api.openai.com/v1" /></label>
+          <label class="opa-field"><span>Model</span>
+            <input id="opaModel" type="text" placeholder="gpt-4o" /></label>
+          <label class="opa-field"><span>API key</span>
+            <input id="opaApiKey" type="password" placeholder="sk-… (stored only in this browser)" /></label>
+        </div>
+        <div class="mem-foot">
+          <span id="opaStatus" class="opa-status"></span>
+          <button class="hbtn" id="opaSave">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script src="orphic-page-agent.js"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -259,6 +341,11 @@
   const mic = $("mic");
   const memBtn = $("memBtn"), memOverlay = $("memOverlay"), memBody = $("memBody"),
         incogToggle = $("incogToggle"), forgetAll = $("forgetAll");
+  const opaBtn = $("opaBtn"), opaOverlay = $("opaOverlay"), opaClose = $("opaClose"),
+        opaEnable = $("opaEnable"), opaProvider = $("opaProvider"), opaBaseURL = $("opaBaseURL"),
+        opaModel = $("opaModel"), opaApiKey = $("opaApiKey"), opaSave = $("opaSave"),
+        opaStatus = $("opaStatus");
+  const opaLocked = $("opaLocked"), opaUnlocked = $("opaUnlocked"), opaUpgrade = $("opaUpgrade");
   let pendingApproval = null;
   let running = false;
   let voiceState = "idle";
@@ -522,9 +609,32 @@
   // ---- actions ----
   function send(obj) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
 
+  // Server-confirmed entitlement for Orphic Page Agent. Polled from
+  // /api/entitlements (fail-closed: false on any error). This is the SECOND check
+  // beyond the button's visibility — even if a user reveals the button via
+  // devtools and flips localStorage, submit() still requires this live server
+  // confirmation. UX-gating only; documented accepted debt.
+  let opaEntitled = false;
+
   function submit() {
     const text = cmd.value.trim();
     if (!text) return;
+
+    // Orphic Page Agent mode (opt-in): route the command to page-agent instead of
+    // the OrphicOS brain. Requires BOTH the user's local toggle AND a live
+    // server-confirmed entitlement (Base Premium). The voice confirm-gate still
+    // holds — voice only FILLED the bar; the human pressed Enter to get here.
+    if (window.OrphicPageAgent && window.OrphicPageAgent.isEnabled()) {
+      if (!opaEntitled) {
+        showError("Orphic Page Agent is a Base Premium feature. Open 🕸 Orphic Page Agent to upgrade.");
+        opaOverlay.classList.add("show");
+        return;
+      }
+      runPageAgent(text);
+      cmd.value = "";
+      return;
+    }
+
     if (!ws || ws.readyState !== 1) {
       // Never swallow a command: a silent drop reads as "the product is broken".
       showError("Reconnecting to the shell — try again in a second.");
@@ -532,6 +642,36 @@
     }
     send({ type: "run", command: text });
     cmd.value = "";  // cleared immediately, so a double-Enter can't submit twice
+  }
+
+  // ---- Orphic Page Agent (opt-in page-agent bridge) ---------------------------
+  // Mirrors the brain run lifecycle: divider -> thinking -> step cards -> done.
+  // Steps arrive via OrphicPageAgent.execute's onEvent callback and reuse the same
+  // addStep()/setThinking() renderers, so the experience reads as one product.
+  function runPageAgent(text) {
+    if (!window.OrphicPageAgent.isReady()) {
+      showError("Orphic Page Agent isn't configured. Open 🕸 Orphic Page Agent to set it up.");
+      opaOverlay.classList.add("show");
+      loadPageAgentConfig();
+      return;
+    }
+    addDivider("🕸 " + text + "  (Orphic Page Agent)");
+    setThinking(true);
+    setRunning(true);
+    window.OrphicPageAgent.execute(text, function (ev) {
+      if (ev.type === "step") {
+        setThinking(false);
+        addStep(ev);
+        if (!ev.done) setThinking(true);
+      } else if (ev.type === "error") {
+        setThinking(false);
+        setRunning(false);
+        showError(ev.message);
+      }
+    }).then(function () {
+      setThinking(false);
+      setRunning(false);
+    });
   }
 
   function setVoiceState(state) {
@@ -621,6 +761,104 @@
   $("memClose").onclick = closeMemory;
   memOverlay.addEventListener("click", (e) => { if (e.target === memOverlay) closeMemory(); });
 
+  // ---- Orphic Page Agent panel ----
+  // Entitlement drives which view the modal shows. The button is always visible
+  // (so the feature is discoverable + the upsell has a trigger); the body swaps
+  // between #opaLocked (upsell) and #opaUnlocked (config) on open + on poll.
+  let opaCatalog = null;  // last feature_catalog from the server (for the upgrade link)
+
+  function setOpaStatus(msg, kind) {
+    opaStatus.textContent = msg || "";
+    opaStatus.classList.toggle("ok", kind === "ok");
+    opaStatus.classList.toggle("err", kind === "err");
+  }
+
+  async function pollEntitlements() {
+    // Fail-closed: any error leaves opaEntitled = false, so the panel shows the
+    // upsell and submit() won't route to page-agent. Polled alongside pollStatus.
+    try {
+      const r = await fetch("/api/entitlements");
+      const d = await r.json();
+      opaEntitled = !!(d.available && (d.features || []).includes("orphic_page_agent"));
+      opaCatalog = Array.isArray(d.feature_catalog) ? d.feature_catalog : null;
+    } catch (_) {
+      opaEntitled = false;
+    }
+    refreshOpaBtn();
+  }
+
+  function loadPageAgentConfig() {
+    // Swap the modal body based on the live entitlement. opaEntitled is the
+    // server-confirmed value from the last pollEntitlements() call.
+    opaLocked.hidden = opaEntitled;
+    opaUnlocked.hidden = !opaEntitled;
+    if (!opaEntitled) {
+      // Point the upgrade link at the catalog's checkout_path if we have it.
+      const feat = opaCatalog && opaCatalog.find((f) => f.id === "orphic_page_agent");
+      if (feat && feat.checkout_path) {
+        const base = location.origin;  // the store is reached via the OrphicOS site
+        opaUpgrade.href = base + feat.checkout_path;
+      } else {
+        opaUpgrade.href = "https://orphicos.app/plans";
+      }
+      return;
+    }
+    const cfg = window.OrphicPageAgent.getConfig();
+    opaEnable.checked = window.OrphicPageAgent.isEnabled();
+    opaProvider.value = cfg.provider || "";
+    opaBaseURL.value = cfg.baseURL || "";
+    opaModel.value = cfg.model || "";
+    opaApiKey.value = cfg.apiKey || "";
+    setOpaStatus(window.OrphicPageAgent.isEnabled() ?
+      (window.OrphicPageAgent.isReady() ? "Ready — Orphic Page Agent started." :
+        "Enabled. Save to start Orphic Page Agent.") : "Off");
+  }
+
+  function closeOpa() { opaOverlay.classList.remove("show"); }
+  opaBtn.onclick = () => { opaOverlay.classList.add("show"); loadPageAgentConfig(); };
+  opaClose.onclick = closeOpa;
+  opaOverlay.addEventListener("click", (e) => { if (e.target === opaOverlay) closeOpa(); });
+
+  opaEnable.onchange = () => {
+    const turningOn = opaEnable.checked;
+    window.OrphicPageAgent.setEnabled(turningOn);
+    if (!turningOn) {
+      setOpaStatus("Off — commands go to the OrphicOS brain.");
+    } else if (window.OrphicPageAgent.isReady()) {
+      setOpaStatus("Ready — Orphic Page Agent started.", "ok");
+    } else {
+      setOpaStatus("Enabled. Fill the key and Save to start Orphic Page Agent.");
+    }
+    refreshOpaBtn();
+  };
+
+  opaSave.onclick = async () => {
+    const cfg = {
+      provider: opaProvider.value.trim(),
+      baseURL: opaBaseURL.value.trim(),
+      model: opaModel.value.trim(),
+      apiKey: opaApiKey.value.trim(),
+    };
+    window.OrphicPageAgent.saveConfig(cfg);
+    if (!window.OrphicPageAgent.isEnabled()) {
+      setOpaStatus("Saved. Turn on Orphic Page Agent to use it.", "ok");
+      return;
+    }
+    setOpaStatus("Starting Orphic Page Agent…");
+    try {
+      await window.OrphicPageAgent.start(cfg);
+      setOpaStatus("Ready — Orphic Page Agent started.", "ok");
+      refreshOpaBtn();
+    } catch (e) {
+      setOpaStatus((e && e.message) || "Couldn't start Orphic Page Agent.", "err");
+    }
+  };
+
+  function refreshOpaBtn() {
+    opaBtn.classList.toggle("on", window.OrphicPageAgent.isEnabled());
+  }
+  refreshOpaBtn();
+
   incogToggle.onchange = async () => {
     try {
       const r = await fetch("/api/incognito", {
@@ -656,6 +894,9 @@
   stopBtn.onclick = async () => {
     stopBtn.childNodes[0].nodeValue = "STOPPING…";
     addSystem("Stop requested — the machine halts after the current action.");
+    // Also halt Orphic Page Agent if it's mid-run — the kill switch must cover
+    // every active surface, not just the OrphicOS brain path.
+    if (window.OrphicPageAgent) window.OrphicPageAgent.stop();
     try {
       await fetch("/api/stop", { method: "POST" });
     } catch (_) {
@@ -669,6 +910,10 @@
   connect();
   pollStatus();
   setInterval(pollStatus, 4000);
+  // Entitlements polled less often than status — premium state changes rarely,
+  // and it's a proxied server round trip. Fail-closed on every call.
+  pollEntitlements();
+  setInterval(pollEntitlements, 30000);
 })();
 </script>
 </body>

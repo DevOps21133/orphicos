@@ -457,6 +457,15 @@ class _FakeMemoryApi:
     def set_incognito(self, on):
         self.incognito = bool(on)
 
+    # The shell's premium-feature check proxies to this (BrainClient carries it
+    # alongside the memory methods). Default = unlocked, so existing memory tests
+    # are unaffected; entitlement-specific tests use _FakeEntitlementsApi instead.
+    def entitlements(self):
+        return {"skills": [], "features": ["orphic_page_agent"],
+                "feature_catalog": [{"id": "orphic_page_agent", "title": "Orphic Page Agent",
+                                     "tagline": "Voice-driven web navigation.",
+                                     "checkout_path": "/plans"}]}
+
 
 class MemoryPanelTests(unittest.TestCase):
     def _app(self, mem):
@@ -515,6 +524,58 @@ class MemoryPanelTests(unittest.TestCase):
         with TestClient(self._app(None)) as client:
             self.assertEqual(client.delete("/api/memory").status_code, 503)
             self.assertEqual(client.put("/api/memory/a1", json={"value": "x"}).status_code, 503)
+
+
+class _FakeEntitlementsApi:
+    """BrainClient stand-in for entitlements tests (Rule 14): no network. The shell
+    proxies to .entitlements() exactly as it does for the memory methods."""
+    def __init__(self, payload, raises=False):
+        self._payload = payload
+        self._raises = raises
+
+    def entitlements(self):
+        if self._raises:
+            raise BrainError("brain unreachable")
+        return self._payload
+
+
+class EntitlementsProxyTests(unittest.TestCase):
+    """The shell's /api/entitlements is the browser's only premium-feature signal.
+    It MUST fail closed: any server error leaves the user locked (a premium feature
+    never wrongly appears unlocked). UX-gating only — see server.entitlements."""
+
+    def _app(self, mem):
+        return create_app(submit=lambda s, d: None, health_check=lambda: True, memory_api=mem)
+
+    def test_forwards_features_and_catalog(self):
+        mem = _FakeEntitlementsApi({"skills": ["gmail"], "features": ["orphic_page_agent"],
+                                    "feature_catalog": [{"id": "orphic_page_agent",
+                                                         "title": "Orphic Page Agent",
+                                                         "tagline": "x", "checkout_path": "/plans"}]})
+        with TestClient(self._app(mem)) as client:
+            body = client.get("/api/entitlements").json()
+        self.assertTrue(body["available"])
+        self.assertIn("orphic_page_agent", body["features"])
+        self.assertTrue(any(f["id"] == "orphic_page_agent" for f in body["feature_catalog"]))
+
+    def test_fails_closed_when_brain_unreachable(self):
+        # The headline guarantee: a BrainError -> user reported as locked, 200 OK,
+        # never a 500 (the browser polls this on a timer; a stack trace would leak).
+        mem = _FakeEntitlementsApi({}, raises=True)
+        with TestClient(self._app(mem)) as client:
+            r = client.get("/api/entitlements")
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertFalse(body["available"])
+        self.assertEqual(body["features"], [])
+        self.assertEqual(body["feature_catalog"], [])
+
+    def test_unwired_reports_unavailable_and_locked(self):
+        # memory_api=None (tests / unwired shell): no entitlement info -> locked.
+        with TestClient(self._app(None)) as client:
+            body = client.get("/api/entitlements").json()
+        self.assertFalse(body["available"])
+        self.assertEqual(body["features"], [])
 
 
 if __name__ == "__main__":

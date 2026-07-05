@@ -243,6 +243,24 @@ def create_app(submit: SubmitFn, health_check: Callable[[], bool],
             memory_api.set_incognito(body.on)
         return JSONResponse({"incognito": bool(getattr(memory_api, "incognito", False))})
 
+    @app.get("/api/entitlements")
+    async def entitlements_endpoint() -> JSONResponse:
+        # The shell's premium-feature visibility check proxies to the server here
+        # (the same memory_api BrainClient carries .entitlements()). FAIL CLOSED:
+        # on any error we report the user as locked — a premium feature must never
+        # wrongly appear unlocked. UX-gating only; see server.entitlements docstring.
+        if memory_api is None or not hasattr(memory_api, "entitlements"):
+            return JSONResponse({"skills": [], "features": [], "feature_catalog": [],
+                                 "available": False})
+        try:
+            data = await asyncio.to_thread(memory_api.entitlements)
+        except Exception:  # noqa: BLE001 — fail closed, never a stack to the browser
+            return JSONResponse({"skills": [], "features": [], "feature_catalog": [],
+                                 "available": False, "error": "unavailable"})
+        # Forward the server shape verbatim, flagging availability so the browser
+        # knows a missing feature is a real lock vs. a transient outage.
+        return JSONResponse({**data, "available": True})
+
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket) -> None:
         origin = ws.headers.get("origin")
