@@ -131,7 +131,15 @@ body::before {
 .btn-ghost:hover { border-color:var(--accent); color:var(--accent-2); }
 
 /* ── HERO ──────────────────────────────── */
-.hero { padding-top:clamp(44px,7vw,88px); padding-bottom:clamp(48px,7vw,92px); }
+.hero { position:relative; isolation:isolate; padding-top:clamp(44px,7vw,88px); padding-bottom:clamp(48px,7vw,92px); }
+/* OrphicOS heritage artwork — the impasto ship, kept as an atmospheric backdrop */
+.hero::before {
+  content:""; position:absolute; inset:0; z-index:-1; pointer-events:none;
+  background:
+    linear-gradient(90deg, var(--bg) 15%, rgba(10,11,14,.74) 44%, rgba(10,11,14,.40) 70%, rgba(10,11,14,.58) 100%),
+    linear-gradient(180deg, rgba(10,11,14,.34) 0%, rgba(10,11,14,0) 30%, rgba(10,11,14,0) 60%, var(--bg) 100%),
+    url("assets/ship-hero.jpg") center right / cover no-repeat;
+}
 .hero-grid { display:grid; grid-template-columns:1fr; gap:clamp(40px,5vw,64px); align-items:center; }
 @media (min-width:940px){ .hero-grid{ grid-template-columns:1.06fr .94fr; } }
 
