@@ -3,6 +3,20 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<script>
+  /* Route German-preferring browsers to the German site. No network call.
+     Remembers a manual language choice so switching to English never bounces back. */
+  (function () {
+    try {
+      var pref = localStorage.getItem("orphic_lang");
+      if (pref === "de") { location.replace("/de/"); return; }
+      if (!pref) {
+        var lang = (navigator.languages && navigator.languages[0]) || navigator.language || "";
+        if (/^de\b/i.test(lang)) { location.replace("/de/"); }
+      }
+    } catch (e) {}
+  })();
+</script>
 <title>OrphicOS — an autonomous AI employee that works on your machines, not the cloud</title>
 <meta name="description" content="OrphicOS deploys autonomous AI employees that run real business workflows end to end in your own desktop apps — locally, on your own infrastructure. Nothing leaves the building." />
 <meta property="og:title" content="OrphicOS — Enterprise Autonomous AI Employees" />
@@ -25,7 +39,7 @@
           <a href="#proof">Proof</a>
           <a href="#deploy">Deployment</a>
         </span>
-        <a href="/de/" class="lang">DE</a>
+        <a href="/de/" class="lang" onclick="try{localStorage.setItem('orphic_lang','de')}catch(e){}">DE</a>
         <a href="mailto:hello@orphicos.app?subject=Enterprise%20consultation" class="nav-cta">Book a consultation</a>
       </nav>
     </div>
@@ -172,7 +186,7 @@
     <span>© 2026 OrphicOS</span>
     <span class="foot-links">
       <a href="mailto:hello@orphicos.app">Contact</a>
-      <a href="/de/">Deutsch</a>
+      <a href="/de/" onclick="try{localStorage.setItem('orphic_lang','de')}catch(e){}">Deutsch</a>
       <a href="/privacy.html">Privacy</a>
       <a href="/terms.html">Terms</a>
       <a href="/imprint.html">Imprint</a>
