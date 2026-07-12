@@ -33,10 +33,14 @@
 
   <main>
 
-    <!-- HERO -->
-    <section class="hero wrap">
-      <div class="stage reveal">
-        <div class="stage-copy">
+    <!-- HERO — scroll-driven origami sequence; scrollbar = playhead (assets/hero.js) -->
+    <section class="scrollhero" data-frame-count="120" data-frame-path="assets/hero/f_" data-frame-pad="3" data-frame-ext=".webp">
+      <div class="sh-sticky">
+        <img class="sh-poster" src="assets/hero/poster.webp" alt="Origami papercraft data center — folded washi-paper server racks with glowing amber windows" decoding="async" />
+        <canvas class="sh-canvas" aria-hidden="true"></canvas>
+        <div class="sh-scrim" aria-hidden="true"></div>
+
+        <div class="sh-copy wrap">
           <p class="eyebrow"><span class="dot"></span>Enterprise · On-premise · Autonomous</p>
           <h1 class="display">AI employees that do the work</h1>
           <p class="hero-desc">On your machines — not the cloud.</p>
@@ -48,24 +52,10 @@
           <p class="hero-note"><span class="dot"></span>Runs locally on your own infrastructure — nothing leaves the building.</p>
         </div>
 
-        <div class="stage-art">
-          <figure class="ship">
-            <img src="assets/ship-hero.jpg" alt="OrphicOS — the ship steering itself through the storm" loading="eager" decoding="async" width="840" height="512" />
-            <div class="ship-gleam" aria-hidden="true"></div>
-          </figure>
+        <p class="sh-cap" data-from="0.32" data-to="0.60">The cloud: your data in someone else's building.</p>
+        <p class="sh-cap" data-from="0.66" data-to="1.1">OrphicOS runs on hardware you own.</p>
 
-          <!-- live-session chip -->
-          <div class="fcard fcard-live" role="img" aria-label="OrphicOS live session: 17 of 18 tasks done, confidence 0.98, human input 0, running locally.">
-            <div class="l1"><span class="dot"></span>Live · Local</div>
-            <div class="l2">Tasks 17/18 · Conf <b>0.98</b></div>
-            <div class="l3">Human input 0</div>
-          </div>
-
-          <!-- watch-it-work chip -->
-          <a class="fcard fcard-watch" href="https://www.youtube.com/channel/UCAZ4UmGpCjGsuipjz5-AdOQ" target="_blank" rel="noopener">
-            <span class="play" aria-hidden="true">▶</span><span class="wt">Watch it work</span>
-          </a>
-        </div>
+        <p class="sh-hint" aria-hidden="true">Scroll<span class="sh-hint-arrow">↓</span></p>
       </div>
     </section>
 
@@ -181,5 +171,6 @@
   </footer>
 
 <script src="/assets/app.js" defer></script>
+<script src="/assets/hero.js" defer></script>
 </body>
 </html>

@@ -144,7 +144,8 @@ body::before {
 
 .stage-copy { padding:clamp(26px,3.6vw,52px); display:flex; flex-direction:column; justify-content:center; z-index:2; }
 .stage-copy .eyebrow { margin-bottom:20px; }
-.hero h1.display {
+.hero h1.display,
+.scrollhero h1.display {
   font-family:var(--display); font-weight:400; text-transform:uppercase;
   font-size:clamp(1.5rem,4.1vw,2.95rem); line-height:1.1; letter-spacing:.004em;
   color:var(--text); margin:0; max-width:15ch;
@@ -343,4 +344,60 @@ body::before {
 @media (prefers-reduced-motion:reduce){
   * { animation:none !important; transition:none !important; scroll-behavior:auto !important; }
   .js .reveal { opacity:1; transform:none; }
+}
+
+/* ── SCROLL HERO — origami sequence, scrollbar = playhead ── */
+/* Without JS (or with reduced motion) the section is one viewport tall
+   and shows the poster + copy as a normal hero. hero.js adds .sh-active
+   to open the 400vh scroll runway. */
+.scrollhero { position:relative; height:100svh; background:#dfe3ea; }
+.js .scrollhero.sh-active { height:400vh; }
+
+.sh-sticky { position:sticky; top:0; height:100svh; overflow:hidden; }
+
+.sh-poster, .sh-canvas { position:absolute; inset:0; width:100%; height:100%; }
+.sh-poster { object-fit:cover; z-index:1; transition:opacity .5s ease; }
+.sh-canvas { z-index:2; display:block; }
+
+/* readability scrim behind the left-aligned copy */
+.sh-scrim {
+  position:absolute; inset:0; z-index:3; pointer-events:none;
+  background:
+    linear-gradient(90deg, rgba(230,232,236,.94) 0%, rgba(230,232,236,.62) 40%, rgba(230,232,236,0) 68%),
+    linear-gradient(180deg, rgba(230,232,236,.55) 0%, rgba(230,232,236,0) 22%);
+}
+
+.sh-copy {
+  position:absolute; inset:0; z-index:4;
+  display:flex; flex-direction:column; justify-content:center;
+  will-change:opacity, transform;
+}
+.sh-copy .eyebrow { margin-bottom:20px; }
+
+.sh-cap {
+  position:absolute; left:50%; bottom:13vh; transform:translateX(-50%);
+  z-index:4; margin:0; opacity:0; pointer-events:none;
+  font-family:var(--mono); font-size:clamp(12.5px,1.5vw,15px);
+  letter-spacing:.14em; text-transform:uppercase; text-align:center;
+  color:var(--text); white-space:nowrap; max-width:92vw;
+  background:color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter:blur(6px);
+  border:1px solid var(--line); border-radius:999px;
+  padding:11px 22px;
+  will-change:opacity;
+}
+@media (max-width:600px){ .sh-cap { white-space:normal; line-height:1.5; border-radius:16px; } }
+
+.sh-hint {
+  display:none;
+  position:absolute; left:50%; bottom:22px; transform:translateX(-50%);
+  z-index:4; margin:0; pointer-events:none;
+  font-family:var(--mono); font-size:11px; letter-spacing:.26em; text-transform:uppercase;
+  color:var(--faint);
+}
+.sh-active .sh-hint { display:block; }
+.sh-hint-arrow { display:inline-block; margin-left:9px; animation:sh-bob 1.8s ease-in-out infinite; }
+@keyframes sh-bob {
+  0%,100% { transform:translateY(0); }
+  50% { transform:translateY(4px); }
 }
