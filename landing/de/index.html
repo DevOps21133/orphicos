@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<script src="/assets/boot.js"></script>
 <title>OrphicOS — ein autonomer KI-Mitarbeiter, der auf deinen Rechnern arbeitet, nicht in der Cloud</title>
 <meta name="description" content="OrphicOS setzt autonome KI-Mitarbeiter ein, die echte Geschäftsabläufe von Anfang bis Ende in deinen eigenen Desktop-Apps erledigen — lokal, auf deiner eigenen Infrastruktur. Keine Daten verlassen dein Haus." />
 <meta property="og:title" content="OrphicOS — Autonome KI-Mitarbeiter für Unternehmen" />
@@ -12,7 +13,6 @@
 <link rel="icon" type="image/png" href="../assets/favicon.png" />
 <link href="../assets/fonts/fonts.css" rel="stylesheet" />
 <link href="../styles.css" rel="stylesheet" />
-<script>document.documentElement.className="js";</script>
 </head>
 <body>
 
@@ -25,8 +25,8 @@
           <a href="#proof">Beweis</a>
           <a href="#deploy">Einführung</a>
         </span>
-        <a href="/" class="lang" onclick="try{localStorage.setItem('orphic_lang','en')}catch(e){}">EN</a>
-        <a href="mailto:hello@orphicos.app?subject=Enterprise-Beratung" class="nav-cta">Beratung buchen</a>
+        <a href="/" class="lang" data-set-lang="en">EN</a>
+        <a href="https://t.me/OrphicOS" class="nav-cta">Beratung buchen</a>
       </nav>
     </div>
   </header>
@@ -42,7 +42,7 @@
           <p class="hero-desc">Auf deinen Rechnern — nicht in der Cloud.</p>
           <p class="hero-sub">OrphicOS führt echte Geschäftsabläufe von Anfang bis Ende in deinen eigenen Desktop-Apps aus — Browser, IDE, Office, Terminal. Er erledigt die Arbeit, und die Daten verlassen dein Haus nie.</p>
           <div class="hero-actions">
-            <a class="btn btn-primary" href="mailto:hello@orphicos.app?subject=Enterprise-Beratung">Enterprise-Beratung buchen <span class="arrow" aria-hidden="true">→</span></a>
+            <a class="btn btn-primary" href="https://t.me/OrphicOS">Enterprise-Beratung buchen <span class="arrow" aria-hidden="true">→</span></a>
             <a class="btn btn-ghost" href="https://www.youtube.com/@the-raw-ai" target="_blank" rel="noopener">Sieh ihn arbeiten <span class="arrow" aria-hidden="true">→</span></a>
           </div>
           <p class="hero-note"><span class="dot"></span>Läuft lokal auf deiner eigenen Infrastruktur — keine Daten verlassen dein Haus.</p>
@@ -51,6 +51,7 @@
         <div class="stage-art">
           <figure class="ship">
             <img src="../assets/ship-hero.jpg" alt="OrphicOS — das Schiff steuert sich selbst durch den Sturm" loading="eager" decoding="async" width="840" height="512" />
+            <div class="ship-gleam" aria-hidden="true"></div>
           </figure>
 
           <!-- Live-Sitzungs-Chip -->
@@ -161,7 +162,7 @@
       <h2 class="reveal">Noch immer Gehälter für Arbeit, die ein KI-Mitarbeiter längst erledigen kann.</h2>
       <p class="reveal">Wenn dein Unternehmen wiederkehrende Computerarbeit hat, können wir sie automatisieren — lokal, auf deiner eigenen Infrastruktur.</p>
       <div class="actions reveal">
-        <a class="btn btn-primary" href="mailto:hello@orphicos.app?subject=Enterprise-Beratung">Enterprise-Beratung buchen <span class="arrow" aria-hidden="true">→</span></a>
+        <a class="btn btn-primary" href="https://t.me/OrphicOS">Enterprise-Beratung buchen <span class="arrow" aria-hidden="true">→</span></a>
         <a class="btn btn-ghost" href="https://www.youtube.com/@the-raw-ai" target="_blank" rel="noopener">Sieh ihn arbeiten <span class="arrow" aria-hidden="true">→</span></a>
       </div>
       <p class="tagline reveal">Jeder hier gezeigte Ablauf kann auf deiner eigenen Infrastruktur eingeführt werden.</p>
@@ -171,28 +172,14 @@
   <footer class="foot wrap">
     <span>© 2026 OrphicOS</span>
     <span class="foot-links">
-      <a href="mailto:hello@orphicos.app">Kontakt</a>
-      <a href="/" onclick="try{localStorage.setItem('orphic_lang','en')}catch(e){}">English</a>
-      <a href="/privacy.html">Datenschutz</a>
-      <a href="/terms.html">AGB</a>
-      <a href="/imprint.html">Impressum</a>
+      <a href="https://t.me/OrphicOS">Kontakt</a>
+      <a href="/" data-set-lang="en">English</a>
+      <a href="/de/datenschutz.html">Datenschutz</a>
+      <a href="/de/agb.html">AGB</a>
+      <a href="/de/impressum.html">Impressum</a>
     </span>
   </footer>
 
-<script>
-  var nav = document.getElementById('nav');
-  function onScroll(){ nav.classList.toggle('scrolled', window.scrollY > 8); }
-  onScroll(); window.addEventListener('scroll', onScroll, {passive:true});
-  if ('IntersectionObserver' in window) {
-    var io = new IntersectionObserver(function(entries){
-      entries.forEach(function(e){
-        if (e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); }
-      });
-    }, {threshold:0.14, rootMargin:'0px 0px -6% 0px'});
-    document.querySelectorAll('.reveal').forEach(function(el){ io.observe(el); });
-  } else {
-    document.querySelectorAll('.reveal').forEach(function(el){ el.classList.add('in'); });
-  }
-</script>
+<script src="/assets/app.js" defer></script>
 </body>
 </html>

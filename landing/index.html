@@ -3,20 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<script>
-  /* Route German-preferring browsers to the German site. No network call.
-     Remembers a manual language choice so switching to English never bounces back. */
-  (function () {
-    try {
-      var pref = localStorage.getItem("orphic_lang");
-      if (pref === "de") { location.replace("/de/"); return; }
-      if (!pref) {
-        var lang = (navigator.languages && navigator.languages[0]) || navigator.language || "";
-        if (/^de\b/i.test(lang)) { location.replace("/de/"); }
-      }
-    } catch (e) {}
-  })();
-</script>
+<script src="/assets/boot.js"></script>
 <title>OrphicOS — an autonomous AI employee that works on your machines, not the cloud</title>
 <meta name="description" content="OrphicOS deploys autonomous AI employees that run real business workflows end to end in your own desktop apps — locally, on your own infrastructure. Nothing leaves the building." />
 <meta property="og:title" content="OrphicOS — Enterprise Autonomous AI Employees" />
@@ -26,7 +13,6 @@
 <link rel="icon" type="image/png" href="assets/favicon.png" />
 <link href="assets/fonts/fonts.css" rel="stylesheet" />
 <link href="styles.css" rel="stylesheet" />
-<script>document.documentElement.className="js";</script>
 </head>
 <body>
 
@@ -39,8 +25,8 @@
           <a href="#proof">Proof</a>
           <a href="#deploy">Deployment</a>
         </span>
-        <a href="/de/" class="lang" onclick="try{localStorage.setItem('orphic_lang','de')}catch(e){}">DE</a>
-        <a href="mailto:hello@orphicos.app?subject=Enterprise%20consultation" class="nav-cta">Book a consultation</a>
+        <a href="/de/" class="lang" data-set-lang="de">DE</a>
+        <a href="https://t.me/OrphicOS" class="nav-cta">Book a consultation</a>
       </nav>
     </div>
   </header>
@@ -56,7 +42,7 @@
           <p class="hero-desc">On your machines — not the cloud.</p>
           <p class="hero-sub">OrphicOS runs real business workflows end to end in your own desktop apps — browser, IDE, Office, terminal. It does the job, and the data never leaves the building.</p>
           <div class="hero-actions">
-            <a class="btn btn-primary" href="mailto:hello@orphicos.app?subject=Enterprise%20consultation">Book an Enterprise Consultation <span class="arrow" aria-hidden="true">→</span></a>
+            <a class="btn btn-primary" href="https://t.me/OrphicOS">Book an Enterprise Consultation <span class="arrow" aria-hidden="true">→</span></a>
             <a class="btn btn-ghost" href="https://www.youtube.com/channel/UCAZ4UmGpCjGsuipjz5-AdOQ" target="_blank" rel="noopener">Watch it work <span class="arrow" aria-hidden="true">→</span></a>
           </div>
           <p class="hero-note"><span class="dot"></span>Runs locally on your own infrastructure — nothing leaves the building.</p>
@@ -65,6 +51,7 @@
         <div class="stage-art">
           <figure class="ship">
             <img src="assets/ship-hero.jpg" alt="OrphicOS — the ship steering itself through the storm" loading="eager" decoding="async" width="840" height="512" />
+            <div class="ship-gleam" aria-hidden="true"></div>
           </figure>
 
           <!-- live-session chip -->
@@ -175,7 +162,7 @@
       <h2 class="reveal">Still paying salaries for work an AI employee can already do.</h2>
       <p class="reveal">If your company has repetitive computer work, we can automate it — locally, on your own infrastructure.</p>
       <div class="actions reveal">
-        <a class="btn btn-primary" href="mailto:hello@orphicos.app?subject=Enterprise%20consultation">Book an Enterprise Consultation <span class="arrow" aria-hidden="true">→</span></a>
+        <a class="btn btn-primary" href="https://t.me/OrphicOS">Book an Enterprise Consultation <span class="arrow" aria-hidden="true">→</span></a>
         <a class="btn btn-ghost" href="https://www.youtube.com/channel/UCAZ4UmGpCjGsuipjz5-AdOQ" target="_blank" rel="noopener">Watch it work <span class="arrow" aria-hidden="true">→</span></a>
       </div>
       <p class="tagline reveal">Every workflow shown here can be deployed on your own infrastructure.</p>
@@ -185,31 +172,14 @@
   <footer class="foot wrap">
     <span>© 2026 OrphicOS</span>
     <span class="foot-links">
-      <a href="mailto:hello@orphicos.app">Contact</a>
-      <a href="/de/" onclick="try{localStorage.setItem('orphic_lang','de')}catch(e){}">Deutsch</a>
+      <a href="https://t.me/OrphicOS">Contact</a>
+      <a href="/de/" data-set-lang="de">Deutsch</a>
       <a href="/privacy.html">Privacy</a>
       <a href="/terms.html">Terms</a>
       <a href="/imprint.html">Imprint</a>
     </span>
   </footer>
 
-<script>
-  // nav hairline on scroll
-  var nav = document.getElementById('nav');
-  function onScroll(){ nav.classList.toggle('scrolled', window.scrollY > 8); }
-  onScroll(); window.addEventListener('scroll', onScroll, {passive:true});
-
-  // scroll reveals (progressive enhancement — content is visible without JS)
-  if ('IntersectionObserver' in window) {
-    var io = new IntersectionObserver(function(entries){
-      entries.forEach(function(e){
-        if (e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); }
-      });
-    }, {threshold:0.14, rootMargin:'0px 0px -6% 0px'});
-    document.querySelectorAll('.reveal').forEach(function(el){ io.observe(el); });
-  } else {
-    document.querySelectorAll('.reveal').forEach(function(el){ el.classList.add('in'); });
-  }
-</script>
+<script src="/assets/app.js" defer></script>
 </body>
 </html>

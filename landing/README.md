@@ -14,8 +14,8 @@ product's own strategy docs (`E:\youtube raw ai\ROADMAP.md`, `PRODUCT-ANGLE.md`,
 - Fonts are self-hosted under `assets/fonts/` → **zero external requests**. A tiny inline
   script does nav-hairline + reveal-on-scroll only; the page is fully readable with JS off.
 
-The primary CTA everywhere is **Book an Enterprise Consultation** — a `mailto:` to
-`hello@orphicos.app`, never a checkout or a "Subscribe". The secondary CTA links to the
+The primary CTA everywhere is **Book an Enterprise Consultation** — a link to Telegram
+`t.me/OrphicOS`, never a checkout or a "Subscribe". The secondary CTA links to the
 YouTube Mission Logs (EN channel / `@the-raw-ai` on the DE page).
 
 The prior "voice desktop helper / museum-plate" design is retired. The unchosen variants

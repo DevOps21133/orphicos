@@ -169,6 +169,22 @@ body::before {
 .stage-art { position:relative; min-height:300px; }
 .ship { position:absolute; inset:0; margin:0; }
 .ship img { width:100%; height:100%; object-fit:cover; object-position:center right; display:block; filter:contrast(1.03) saturate(1.03); }
+
+/* interactive ship — pointer parallax + 3D tilt + cursor gleam.
+   Progressive enhancement: JS adds .tilt on pointer devices; without JS (or with
+   reduced-motion / touch) the ship stays the same static image. Self-hosted, no requests. */
+.stage-art { perspective:1150px; }
+.ship { transform-style:preserve-3d; transition:transform .45s cubic-bezier(.2,.7,.2,1); }
+.ship img { transition:transform .45s cubic-bezier(.2,.7,.2,1); will-change:transform; }
+.ship-gleam {
+  position:absolute; inset:0; z-index:1; pointer-events:none; opacity:0;
+  mix-blend-mode:soft-light; transition:opacity .4s ease;
+  background:radial-gradient(210px 210px at var(--gx,50%) var(--gy,42%), rgba(255,255,255,.95), rgba(255,255,255,0) 62%);
+}
+.stage-art.tilt .ship { transform:rotateY(calc(var(--tx,0) * 3.4deg)) rotateX(calc(var(--ty,0) * -2.8deg)); }
+.stage-art.tilt .ship img { transform:scale(1.055) translate3d(calc(var(--tx,0) * 15px), calc(var(--ty,0) * 11px), 0); }
+.stage-art.tilt .ship-gleam { opacity:.55; }
+
 .stage-art::before {
   content:""; position:absolute; inset:0; z-index:1; pointer-events:none;
   background:linear-gradient(90deg,#f1f3f6 0%, rgba(241,243,246,0) 32%);
