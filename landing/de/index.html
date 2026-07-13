@@ -33,31 +33,13 @@
 
   <main>
 
-    <!-- HERO — scrollgesteuerte Origami-Sequenz; Scrollbalken = Abspielkopf (assets/hero.js) -->
-    <section class="scrollhero" data-frame-count="120" data-frame-path="/assets/hero/f_" data-frame-pad="3" data-frame-ext=".webp">
-      <div class="sh-sticky">
-        <img class="sh-poster" src="/assets/hero/poster.webp" alt="Origami-Papierkunst-Rechenzentrum — gefaltete Washi-Papier-Serverschränke mit leuchtenden bernsteinfarbenen Fenstern" decoding="async" />
-        <canvas class="sh-canvas" aria-hidden="true"></canvas>
-        <div class="sh-scrim" aria-hidden="true"></div>
-
-        <div class="sh-copy wrap">
-          <p class="eyebrow"><span class="dot"></span>Enterprise · On-Premise · Autonom</p>
-          <h1 class="display">KI, die die Arbeit erledigt</h1>
-          <p class="hero-desc">Auf deinen Rechnern — nicht in der Cloud.</p>
-          <p class="hero-sub">OrphicOS führt echte Geschäftsabläufe von Anfang bis Ende in deinen eigenen Desktop-Apps aus — Browser, IDE, Office, Terminal. Er erledigt die Arbeit, und die Daten verlassen dein Haus nie.</p>
-          <div class="hero-actions">
-            <a class="btn btn-primary" href="https://t.me/OrphicOS">Enterprise-Beratung buchen <span class="arrow" aria-hidden="true">→</span></a>
-            <a class="btn btn-ghost" href="https://www.youtube.com/@the-raw-ai" target="_blank" rel="noopener">Sieh ihn arbeiten <span class="arrow" aria-hidden="true">→</span></a>
-          </div>
-          <p class="hero-note"><span class="dot"></span>Läuft lokal auf deiner eigenen Infrastruktur — keine Daten verlassen dein Haus.</p>
-        </div>
-
-        <p class="sh-cap" data-from="0.32" data-to="0.60">Die Cloud: deine Daten in einem fremden Gebäude.</p>
-        <p class="sh-cap" data-from="0.66" data-to="1.1">OrphicOS läuft auf Hardware, die dir gehört.</p>
-
-        <p class="sh-hint" aria-hidden="true">Scrollen<span class="sh-hint-arrow">↓</span></p>
-      </div>
-    </section>
+    <!-- HERO — scrollgescrubbter Origami-Kameraflug (assets/scrollworld.js + world.de.js) -->
+    <div id="world">
+      <noscript>
+        <img src="/assets/world/scene1.webp" alt="Origami-Papierkunst-Rechenzentrum — gefaltete Washi-Papier-Serverschränke mit leuchtenden bernsteinfarbenen Fenstern" style="width:100%;display:block;" />
+        <h1>Ein KI-Mitarbeiter, der die Arbeit erledigt — auf deinen Rechnern, nicht in der Cloud.</h1>
+      </noscript>
+    </div>
 
     <!-- DATENLECK-KEIL -->
     <section class="wedge">
@@ -171,6 +153,7 @@
   </footer>
 
 <script src="/assets/app.js" defer></script>
-<script src="/assets/hero.js" defer></script>
+<script src="/assets/scrollworld.js" defer></script>
+<script src="/assets/world.de.js" defer></script>
 </body>
 </html>
