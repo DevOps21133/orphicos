@@ -23,6 +23,29 @@ of you.
    from your OrphicOS account — paste it in, save, and start OrphicOS again.
 3. The OrphicOS window opens in your browser. Type what the machine should do.
 
+## Run from source
+
+The client never holds an LLM key. The brain is `server/`; copy `server/.env.example`
+to `server/.env` and fill `LLM_API_KEY`, `LLM_MODEL`, and `LLM_BASE_URL`. Real keys
+and tokens stay gitignored (`server/.env`, `server/tokens.json`, `client/config.toml`).
+
+```powershell
+# brain
+python -m venv server\.venv
+server\.venv\Scripts\python.exe -m pip install -r server\requirements.txt
+server\.venv\Scripts\python.exe -m uvicorn server.app:app --host 127.0.0.1 --port 8000
+server\.venv\Scripts\python.exe -m server.auth issue demo
+
+# thin client
+python -m venv client\.venv
+client\.venv\Scripts\python.exe -m pip install -r client\requirements.txt
+copy client\config.example.toml client\config.toml
+# set SERVER_BASE = "http://localhost:8000" and TOKEN from the issue command
+powershell -ExecutionPolicy Bypass -File scripts\run_shell.ps1
+```
+
+See `docs/runbook.md` and `server/scripts/deploy.md` for the full operator path.
+
 ## Your data
 
 Your commands and a compact map of your screen are **processed securely on OrphicOS
@@ -39,3 +62,7 @@ is transcribed locally on your machine — audio never leaves your PC.
   it and press Enter.
 
 Third-party components are listed in `THIRD-PARTY-NOTICES.txt` (installed alongside the app).
+
+## License
+
+MIT. See [LICENSE](LICENSE).
