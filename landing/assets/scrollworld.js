@@ -135,8 +135,16 @@ function mountScrollWorld(container, config) {
         v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
         v.src = URL.createObjectURL(blob);
         v.addEventListener('loadedmetadata', () => { s.ready = true; read(); });
-        v.addEventListener('seeked', () => { s.el.classList.add('has-clip'); }, { once: true });
-        v.addEventListener('loadeddata', () => { try { v.pause(); } catch (e) {} if (userReady) primeVideo(v); });
+        v.addEventListener('seeked', () => {
+          if (v.videoWidth > 0) s.el.classList.add('has-clip');
+        });
+        v.addEventListener('playing', () => { if (v.videoWidth > 0) s.el.classList.add('has-clip'); });
+        v.addEventListener('loadeddata', () => {
+          if (!(autoplayOn && !userTookScroll)) {
+            try { v.pause(); } catch (e) {}
+          }
+          if (userReady) primeVideo(v);
+        });
         s.el.appendChild(v); s.video = v; s.hasClip = true;
       }).catch(() => { s.loading = false; });
   }
@@ -216,12 +224,26 @@ function mountScrollWorld(container, config) {
       dots.forEach((d, k) => d.classList.toggle('is-active', k === near));
       container.style.setProperty('--sw-accent', SECTIONS[near].accent || '');
     }
-    hint.style.opacity = clamp(1 - y / (0.5 * vh));
+    hint.style.opacity = (autoplayOn && !userTookScroll) ? 0 : clamp(1 - y / (0.5 * vh));
     if (particles) particles.style.transform = `translate3d(0, ${-y * 0.05}px, 0)`;
     ticking = false;
   }
 
   function raf() {
+    if (autoplayOn && !userTookScroll) {
+      for (let i = 0; i < NSEG; i++) {
+        const s = SEGMENTS[i];
+        if (!s.video || s.video.paused || s.video.ended || !s.ready) continue;
+        const dur = s.video.duration || 1;
+        const pr = clamp(s.video.currentTime / dur, 0, 0.999);
+        playheadY = s.start + pr * Math.max(1, s.end - s.start);
+        s.cur = pr;
+        s.target = pr;
+      }
+      read();
+      requestAnimationFrame(raf);
+      return;
+    }
     const eps = isMobile() ? 0.02 : 0.008;
     for (let i = 0; i < NSEG; i++) {
       const s = SEGMENTS[i];
@@ -252,12 +274,17 @@ function mountScrollWorld(container, config) {
   window.addEventListener('touchstart', onFirstGesture, { once: true, passive: true });
 
   seedParticles(particles, reduce || coarse);
+  try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch (e) {}
+  window.scrollTo(0, 0);
+  let scrollArmed = false;
+  setTimeout(() => { scrollArmed = true; }, 600);
   window.addEventListener('scroll', () => {
     const sy = window.scrollY || window.pageYOffset || 0;
-    if (sy > 20 && !userTookScroll) {
+    if (scrollArmed && sy > 40 && !userTookScroll) {
       if (autoplayOn) {
         userTookScroll = true;
         autoplayOn = false;
+        SEGMENTS.forEach(s => { try { if (s.video) s.video.pause(); } catch (e) {} });
       } else if (autoplayFinished) {
         userTookScroll = true;
         scrollAnchor = sy;
@@ -266,24 +293,53 @@ function mountScrollWorld(container, config) {
     if (!ticking) { ticking = true; requestAnimationFrame(read); }
   }, { passive: true });
 
-  function tickAutoplay(now) {
-    if (autoplayOn && !userTookScroll) {
-      if (!autoplayT0) autoplayT0 = now;
-      const dur = flightMs();
-      const t = Math.min(1, (now - autoplayT0) / dur);
-      playheadY = t * totalW * vh;
-      read();
-      if (t >= 1) {
-        autoplayOn = false;
-        autoplayFinished = true;
-        playheadY = totalW * vh;
-        track.style.height = (1.2 * vh) + 'px';
-        hintText.textContent = config.hint || 'scroll';
-        hint.style.opacity = 1;
-        read();
-      }
+  let autoIndex = 0;
+  function finishAutoplay() {
+    autoplayOn = false;
+    autoplayFinished = true;
+    playheadY = totalW * vh;
+    track.style.height = (1.2 * vh) + 'px';
+    hintText.textContent = config.hint || 'scroll';
+    hint.style.opacity = 1;
+    read();
+  }
+
+  function playSegment(i) {
+    if (!autoplayOn || userTookScroll) return;
+    if (i >= NSEG) { finishAutoplay(); return; }
+    const s = SEGMENTS[i];
+    loadClip(s);
+    if (!s.ready || !s.video) {
+      setTimeout(() => playSegment(i), 80);
+      return;
     }
-    if (autoplayOn && !userTookScroll) requestAnimationFrame(tickAutoplay);
+    autoIndex = i;
+    playheadY = s.start + 2;
+    SEGMENTS.forEach((o, k) => {
+      if (k !== i && o.video) { try { o.video.pause(); } catch (e) {} }
+    });
+    try { s.video.currentTime = 0; } catch (e) {}
+    const goNext = () => playSegment(i + 1);
+    s.video.addEventListener('ended', goNext, { once: true });
+    const p = s.video.play();
+    if (p && p.catch) {
+      p.catch(() => {
+        // Permissions-Policy or autoplay block: time-scrub this clip instead.
+        const dur = (s.video.duration || 4) * 1000;
+        const t0 = performance.now();
+        (function scrub(now) {
+          if (!autoplayOn || userTookScroll) return;
+          const u = Math.min(1, (now - t0) / dur);
+          try { s.video.currentTime = u * (s.video.duration || 1) * 0.999; } catch (e) {}
+          playheadY = s.start + u * Math.max(1, s.end - s.start);
+          s.el.classList.add('has-clip');
+          read();
+          if (u >= 1) goNext();
+          else requestAnimationFrame(scrub);
+        })(t0);
+      });
+    }
+    read();
   }
   function onResize() {
     if (coarse && window.innerWidth === laidOutW) return;
@@ -297,7 +353,7 @@ function mountScrollWorld(container, config) {
   requestAnimationFrame(raf);
   if (autoplayOn) {
     hint.style.opacity = 0;
-    requestAnimationFrame(tickAutoplay);
+    playSegment(0);
   }
 
   // ---- helpers ----
