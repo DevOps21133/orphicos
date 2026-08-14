@@ -56,7 +56,8 @@ function mountScrollWorld(container, config) {
   const copylayer = el('div', 'sw-copylayer');
   const route = el('div', 'sw-route');
   const hint = el('div', 'sw-hint');
-  const hintText = el('span'); hintText.textContent = config.hint || 'scroll'; hint.appendChild(hintText);
+  const AUTOPLAY = config.autoplayOnLoad !== false && !reduce;
+  const hintText = el('span'); hintText.textContent = AUTOPLAY ? '' : (config.hint || 'scroll'); hint.appendChild(hintText);
   hint.appendChild(el('i'));
   const track = el('div', 'sw-track');
 
@@ -98,6 +99,12 @@ function mountScrollWorld(container, config) {
   let vh = window.innerHeight, stageX = 0, totalW = 0, activeIndex = -1, ticking = false;
   let base = 0;                       // document offset of the hero's scroll runway
   let laidOutW = window.innerWidth;
+  let playheadY = 0;
+  let autoplayOn = AUTOPLAY;
+  let autoplayFinished = false;
+  let autoplayT0 = 0;
+  let userTookScroll = false;
+  let scrollAnchor = 0;
 
   function layout() {
     vh = window.innerHeight;
@@ -134,8 +141,27 @@ function mountScrollWorld(container, config) {
       }).catch(() => { s.loading = false; });
   }
 
+  function flightMs() {
+    let ms = 0;
+    for (let i = 0; i < NSEG; i++) {
+      const s = SEGMENTS[i];
+      if (s.video && s.ready && s.video.duration) ms += s.video.duration * 1000;
+      else ms += (s.w || 1) * 4200;
+    }
+    return Math.max(ms, 10000);
+  }
+
+  function currentY() {
+    if (autoplayOn && !userTookScroll) return playheadY;
+    if (autoplayFinished && !userTookScroll) return totalW * vh;
+    if (autoplayFinished && userTookScroll) {
+      return totalW * vh + Math.max(0, (window.scrollY || window.pageYOffset) - scrollAnchor);
+    }
+    return Math.max(0, (window.scrollY || window.pageYOffset) - base);
+  }
+
   function read() {
-    const y = Math.max(0, (window.scrollY || window.pageYOffset) - base);
+    const y = currentY();
     const fade = CROSSFADE * vh;
     let ci = 0;
     for (let i = 0; i < NSEG; i++) if (y >= SEGMENTS[i].start) ci = i;
@@ -226,7 +252,39 @@ function mountScrollWorld(container, config) {
   window.addEventListener('touchstart', onFirstGesture, { once: true, passive: true });
 
   seedParticles(particles, reduce || coarse);
-  window.addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(read); } }, { passive: true });
+  window.addEventListener('scroll', () => {
+    const sy = window.scrollY || window.pageYOffset || 0;
+    if (sy > 20 && !userTookScroll) {
+      if (autoplayOn) {
+        userTookScroll = true;
+        autoplayOn = false;
+      } else if (autoplayFinished) {
+        userTookScroll = true;
+        scrollAnchor = sy;
+      }
+    }
+    if (!ticking) { ticking = true; requestAnimationFrame(read); }
+  }, { passive: true });
+
+  function tickAutoplay(now) {
+    if (autoplayOn && !userTookScroll) {
+      if (!autoplayT0) autoplayT0 = now;
+      const dur = flightMs();
+      const t = Math.min(1, (now - autoplayT0) / dur);
+      playheadY = t * totalW * vh;
+      read();
+      if (t >= 1) {
+        autoplayOn = false;
+        autoplayFinished = true;
+        playheadY = totalW * vh;
+        track.style.height = (1.2 * vh) + 'px';
+        hintText.textContent = config.hint || 'scroll';
+        hint.style.opacity = 1;
+        read();
+      }
+    }
+    if (autoplayOn && !userTookScroll) requestAnimationFrame(tickAutoplay);
+  }
   function onResize() {
     if (coarse && window.innerWidth === laidOutW) return;
     layout();
@@ -235,7 +293,12 @@ function mountScrollWorld(container, config) {
   window.addEventListener('orientationchange', layout);
   window.addEventListener('load', layout);
   layout();
+  SEGMENTS.forEach(loadClip);
   requestAnimationFrame(raf);
+  if (autoplayOn) {
+    hint.style.opacity = 0;
+    requestAnimationFrame(tickAutoplay);
+  }
 
   // ---- helpers ----
   function el(tag, cls) { const n = document.createElement(tag); if (cls) n.className = cls; return n; }
