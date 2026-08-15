@@ -13,10 +13,10 @@
         still: '/assets/world/scene1.webp',
         clip: '/assets/world/dive1.mp4', clipMobile: '/assets/world/dive1-m.mp4',
         scroll: 1.6, linger: 0.35,
-        eyebrow: 'OrphicOS · Lokale KI für Unternehmen',
+        eyebrow: 'OrphicOS · Private KI-Infrastruktur für Unternehmen',
         title: 'Lokale KI auf deinen Rechnern — nicht in der Cloud.',
-        body: 'Wir richten ChatGPT-ähnliche KI bei dir ein. Daten bleiben im Haus. Wiederkehrende Aufgaben automatisieren wir, wenn du das willst.',
-        tags: ['Lokal', 'Keine Cloud', 'Automatisierung optional']
+        body: 'Wir richten moderne KI-Modelle auf deiner Infrastruktur ein. Keine sensiblen Daten an externe KI-Dienste. Aufgaben automatisieren wir, wenn du das willst.',
+        tags: ['Privat', 'Keine Cloud', 'Automatisierung optional']
       },
       {
         id: 'schreibtisch', label: 'Dein Schreibtisch', accent: '#d94f2b',
@@ -45,7 +45,7 @@
         title: 'Nichts verlässt jemals das Gebäude.',
         body: 'Deine Verträge, Kundendaten und dein Quellcode bleiben auf deiner Festplatte. Leistung und Vertraulichkeit — ohne Kompromiss.',
         cta: {
-          primary: { label: 'Enterprise-Beratung buchen', href: 'https://t.me/OrphicOS' },
+          primary: { label: '15-Minuten Erstgespräch', href: 'tel:+4915678383760' },
           secondary: { label: 'RUF DIREKT AN', href: 'tel:+4915678383760' }
         }
       }
