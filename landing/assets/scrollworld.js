@@ -1,13 +1,8 @@
 /* ============================================================================
    scroll-world hero — scroll-scrubbed origami camera flight (orphicos.app)
    ----------------------------------------------------------------------------
-   Adapted from the portable scroll-world scrub engine for use as a HERO above
-   the normal page sections (not a full-page takeover):
-     - no own topbar/scrollbar (the site's sticky .nav stays in charge)
-     - scroll math is anchored to the hero's own document offset
-     - past the end of the flight the whole fixed ensemble fades out and hands
-       the viewport to the sections scrolling up beneath it
-     - the first scene's title renders as the page <h1>
+   Hero camera flight plays on its own clock (muted autoplay). Scroll never
+   scrubs the clips — the block is one viewport tall and leaves with the page.
    Assets are encoded per the scroll-world pipeline: native-res crf 20 -g 8
    +faststart desktop clips, 720p -g 4 "-m" siblings for phones, stills as
    posters/reduced-motion fallback. Clips load as blobs (always seekable).
@@ -37,6 +32,7 @@ function mountScrollWorld(container, config) {
                    w: s.scroll || DIVE_W, linger: s.linger || 0 };
     SEGMENTS.push(dive);
     s._seg = dive;
+    s._segIndex = SEGMENTS.length - 1;
     if (i < N - 1 && CONNECTORS[i]) {
       SEGMENTS.push({ kind: 'conn', si: i, clip: CONNECTORS[i], clipM: CONNECTORS_M[i],
                       still: SECTIONS[i + 1].still, accent: SECTIONS[i + 1].accent, w: CONN_W });
@@ -89,7 +85,7 @@ function mountScrollWorld(container, config) {
 
     const dot = el('button', 'sw-route__dot'); dot.style.setProperty('--sw-accent', s.accent || '');
     dot.innerHTML = `<span class="sw-route__label">${esc(s.label || '')}</span><i></i>`;
-    dot.addEventListener('click', () => jumpTo(i)); route.appendChild(dot); dots.push(dot);
+    dot.addEventListener('click', () => playSegment(SECTIONS[i]._segIndex)); route.appendChild(dot); dots.push(dot);
   });
 
   // ---- math ----
@@ -113,14 +109,10 @@ function mountScrollWorld(container, config) {
     let off = 0;
     SEGMENTS.forEach(s => { s.start = off * vh; off += s.w; s.end = off * vh; });
     totalW = off;
-    track.style.height = (totalW * vh + vh) + 'px';   // +1vh: the next section slides up during it
-    base = track.getBoundingClientRect().top + (window.scrollY || window.pageYOffset);
+    track.style.height = '100vh';
+    track.style.minHeight = '100dvh';
+    base = 0;
     read();
-  }
-
-  function jumpTo(i) {
-    const seg = SECTIONS[i]._seg;
-    window.scrollTo({ top: base + seg.start + (seg.end - seg.start) * 0.5, behavior: reduce ? 'auto' : 'smooth' });
   }
 
   function loadClip(s) {
@@ -140,9 +132,6 @@ function mountScrollWorld(container, config) {
         });
         v.addEventListener('playing', () => { if (v.videoWidth > 0) s.el.classList.add('has-clip'); });
         v.addEventListener('loadeddata', () => {
-          if (!(autoplayOn && !userTookScroll)) {
-            try { v.pause(); } catch (e) {}
-          }
           if (userReady) primeVideo(v);
         });
         s.el.appendChild(v); s.video = v; s.hasClip = true;
@@ -160,12 +149,7 @@ function mountScrollWorld(container, config) {
   }
 
   function currentY() {
-    if (autoplayOn && !userTookScroll) return playheadY;
-    if (autoplayFinished && !userTookScroll) return totalW * vh;
-    if (autoplayFinished && userTookScroll) {
-      return totalW * vh + Math.max(0, (window.scrollY || window.pageYOffset) - scrollAnchor);
-    }
-    return Math.max(0, (window.scrollY || window.pageYOffset) - base);
+    return playheadY;
   }
 
   function read() {
@@ -205,16 +189,8 @@ function mountScrollWorld(container, config) {
       c.style.pointerEvents = cop > 0.5 ? 'auto' : 'none';
     }
 
-    // ---- handoff: past the flight, fade the fixed world out and give the
-    // viewport to the sections scrolling up beneath it (reversible) ----
-    const slide = clamp((y - totalW * vh) / vh);           // 0..1 while the next section slides up
-    const fadeMain = 1 - smooth(clamp(slide / 0.55));
-    const fadeSky = 1 - smooth(clamp((slide - 0.3) / 0.65));
-    [stage, copylayer, route].forEach(n => { n.style.opacity = fadeMain; });
-    sky.style.opacity = fadeSky;
-    const gone = slide >= 0.999;
-    [stage, copylayer, route, sky, hint].forEach(n => { n.style.visibility = gone ? 'hidden' : ''; });
-    route.style.pointerEvents = fadeMain > 0.5 ? '' : 'none';
+    [stage, copylayer, route, sky].forEach(n => { n.style.opacity = 1; n.style.visibility = ''; });
+    route.style.pointerEvents = '';
 
     const cur = SEGMENTS[ci];
     const near = clamp(cur.kind === 'dive' ? cur.si
@@ -224,46 +200,30 @@ function mountScrollWorld(container, config) {
       dots.forEach((d, k) => d.classList.toggle('is-active', k === near));
       container.style.setProperty('--sw-accent', SECTIONS[near].accent || '');
     }
-    hint.style.opacity = (autoplayOn && !userTookScroll) ? 0 : clamp(1 - y / (0.5 * vh));
+    hint.style.opacity = 0;
     if (particles) particles.style.transform = `translate3d(0, ${-y * 0.05}px, 0)`;
     ticking = false;
   }
 
   function raf() {
-    if (autoplayOn && !userTookScroll) {
-      for (let i = 0; i < NSEG; i++) {
-        const s = SEGMENTS[i];
-        if (!s.video || s.video.paused || s.video.ended || !s.ready) continue;
-        const dur = s.video.duration || 1;
-        const pr = clamp(s.video.currentTime / dur, 0, 0.999);
-        playheadY = s.start + pr * Math.max(1, s.end - s.start);
-        s.cur = pr;
-        s.target = pr;
-      }
-      read();
-      requestAnimationFrame(raf);
-      return;
-    }
-    const eps = isMobile() ? 0.02 : 0.008;
     for (let i = 0; i < NSEG; i++) {
       const s = SEGMENTS[i];
-      if (!s.hasClip || !s.ready || !s.video) continue;
-      if (s.video.seeking) continue;
-      if (!s.visible && Math.abs(s.cur - s.target) < 0.002) continue;
-      s.cur += (s.target - s.cur) * (reduce ? 1 : 0.18);
+      if (!s.video || s.video.paused || s.video.ended || !s.ready) continue;
       const dur = s.video.duration || 1;
-      const t = clamp(s.cur, 0, 0.999) * dur;
-      if (Math.abs(s.video.currentTime - t) > eps) { try { s.video.currentTime = t; } catch (e) {} }
+      const pr = clamp(s.video.currentTime / dur, 0, 0.999);
+      playheadY = s.start + pr * Math.max(1, s.end - s.start);
+      s.cur = pr;
+      s.target = pr;
     }
+    read();
     requestAnimationFrame(raf);
   }
 
   // iOS: prime muted videos on first gesture so seeked frames actually paint.
   let userReady = false;
   function primeVideo(v) {
-    if (!isMobile() || !v) return;
-    try { const p = v.play(); if (p && p.then) p.then(() => { try { v.pause(); } catch (e) {} }).catch(() => {}); }
-    catch (e) {}
+    if (!v) return;
+    try { const p = v.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
   }
   function onFirstGesture() {
     if (userReady) return;
@@ -274,38 +234,16 @@ function mountScrollWorld(container, config) {
   window.addEventListener('touchstart', onFirstGesture, { once: true, passive: true });
 
   seedParticles(particles, reduce || coarse);
-  try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch (e) {}
-  window.scrollTo(0, 0);
-  let scrollArmed = false;
-  setTimeout(() => { scrollArmed = true; }, 600);
-  window.addEventListener('scroll', () => {
-    const sy = window.scrollY || window.pageYOffset || 0;
-    if (scrollArmed && sy > 40 && !userTookScroll) {
-      if (autoplayOn) {
-        userTookScroll = true;
-        autoplayOn = false;
-        SEGMENTS.forEach(s => { try { if (s.video) s.video.pause(); } catch (e) {} });
-      } else if (autoplayFinished) {
-        userTookScroll = true;
-        scrollAnchor = sy;
-      }
-    }
-    if (!ticking) { ticking = true; requestAnimationFrame(read); }
-  }, { passive: true });
 
   let autoIndex = 0;
   function finishAutoplay() {
     autoplayOn = false;
     autoplayFinished = true;
-    playheadY = totalW * vh;
-    track.style.height = (1.2 * vh) + 'px';
-    hintText.textContent = config.hint || 'scroll';
-    hint.style.opacity = 1;
+    playheadY = Math.max(0, totalW * vh - 2);
     read();
   }
 
   function playSegment(i) {
-    if (!autoplayOn || userTookScroll) return;
     if (i >= NSEG) { finishAutoplay(); return; }
     const s = SEGMENTS[i];
     loadClip(s);
@@ -328,7 +266,7 @@ function mountScrollWorld(container, config) {
         const dur = (s.video.duration || 4) * 1000;
         const t0 = performance.now();
         (function scrub(now) {
-          if (!autoplayOn || userTookScroll) return;
+          if (!autoplayOn) return;
           const u = Math.min(1, (now - t0) / dur);
           try { s.video.currentTime = u * (s.video.duration || 1) * 0.999; } catch (e) {}
           playheadY = s.start + u * Math.max(1, s.end - s.start);
@@ -391,8 +329,9 @@ function injectCSS() {
   .sw-root{--sw-bg:#f4efe4;--sw-ink:#2b3450;--sw-ink-soft:#6b7288;--sw-accent:#d94f2b;
     --sw-font-display:var(--font-display,"Segoe UI",system-ui,sans-serif);
     --sw-font-body:var(--font-body,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif);
-    color:var(--sw-ink);font-family:var(--sw-font-body);}
-  .sw-sky{position:fixed;inset:0;z-index:1;overflow:hidden;pointer-events:none;background:var(--sw-bg);}
+    color:var(--sw-ink);font-family:var(--sw-font-body);
+    position:relative;display:block;width:100%;height:100vh;height:100dvh;overflow:hidden;}
+  .sw-sky{position:absolute;inset:0;z-index:1;overflow:hidden;pointer-events:none;background:var(--sw-bg);}
   .sw-sky__grad{position:absolute;inset:-10%;background:linear-gradient(178deg,color-mix(in srgb,var(--sw-accent) 12%,var(--sw-bg)) 0%,var(--sw-bg) 55%,color-mix(in srgb,var(--sw-accent) 6%,var(--sw-bg)) 100%);}
   .sw-sky__glow{position:absolute;inset:0;background:radial-gradient(60% 42% at 74% 16%,color-mix(in srgb,var(--sw-accent) 22%,transparent),transparent 70%),radial-gradient(46% 34% at 50% 50%,color-mix(in srgb,#fff 45%,transparent),transparent 70%);}
   .sw-particles{position:absolute;inset:-6% -2%;will-change:transform;}
@@ -401,11 +340,11 @@ function injectCSS() {
   .sw-pt--dot::before{background:radial-gradient(circle at 34% 30%,color-mix(in srgb,var(--sw-accent) 60%,#000),#000 82%);}
   .sw-pt--ring::before{background:transparent;border:2px solid color-mix(in srgb,var(--sw-accent) 55%,transparent);}
   @keyframes sw-drift{0%{opacity:0;transform:scale(var(--sw-sc)) translate(0,12vh) rotate(0)}12%{opacity:.5}88%{opacity:.45}100%{opacity:0;transform:scale(var(--sw-sc)) translate(4vw,-22vh) rotate(210deg)}}
-  .sw-stage{position:fixed;inset:0;z-index:10;pointer-events:none;}
+  .sw-stage{position:absolute;inset:0;z-index:10;pointer-events:none;}
   .sw-scene{position:absolute;inset:0;opacity:0;overflow:hidden;will-change:opacity;}
   .sw-scene__video,.sw-scene__still{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 42%;}
   .sw-scene__still{will-change:transform;} .sw-scene.has-clip .sw-scene__still{opacity:0;} .sw-scene__video{z-index:1;}
-  .sw-copylayer{position:fixed;inset:0;z-index:20;pointer-events:none;}
+  .sw-copylayer{position:absolute;inset:0;z-index:20;pointer-events:none;}
   .sw-copylayer::before{content:"";position:absolute;inset:0;width:min(58vw,780px);background:linear-gradient(90deg,var(--sw-bg) 0%,color-mix(in srgb,var(--sw-bg) 82%,transparent) 34%,color-mix(in srgb,var(--sw-bg) 40%,transparent) 62%,transparent 100%);}
   .sw-copy{position:absolute;left:clamp(18px,5vw,64px);top:50%;transform:translateY(-50%);width:min(42vw,460px);opacity:0;will-change:opacity,transform;}
   .sw-copy__num{font-family:ui-monospace,Menlo,monospace;font-size:.74rem;letter-spacing:.12em;color:var(--sw-ink-soft);}
@@ -418,7 +357,7 @@ function injectCSS() {
   .sw-btn{text-decoration:none;font-weight:600;font-size:.95rem;padding:13px 24px;border-radius:999px;transition:transform .2s;}
   .sw-btn--primary{color:#fff;background:var(--sw-accent);} .sw-btn--primary:hover{transform:translateY(-2px);}
   .sw-btn--ghost{color:var(--sw-ink);border:1.5px solid color-mix(in srgb,var(--sw-ink) 25%,transparent);} .sw-btn--ghost:hover{transform:translateY(-2px);}
-  .sw-route{position:fixed;right:clamp(14px,2.4vw,30px);top:50%;z-index:30;transform:translateY(-50%);display:flex;flex-direction:column;gap:22px;padding:18px 10px;}
+  .sw-route{position:absolute;right:clamp(14px,2.4vw,30px);top:50%;z-index:30;transform:translateY(-50%);display:flex;flex-direction:column;gap:22px;padding:18px 10px;}
   .sw-route::before{content:"";position:absolute;left:50%;top:22px;bottom:22px;width:2px;transform:translateX(-50%);background:var(--sw-accent);opacity:.28;}
   .sw-route__dot{position:relative;border:0;background:transparent;cursor:pointer;width:14px;height:14px;display:grid;place-items:center;}
   .sw-route__dot i{width:9px;height:9px;border-radius:50%;background:color-mix(in srgb,var(--sw-accent) 40%,transparent);transition:transform .3s,background .3s,box-shadow .3s;}
@@ -426,11 +365,11 @@ function injectCSS() {
   .sw-route__dot.is-active i{background:var(--sw-accent);transform:scale(1.4);box-shadow:0 0 0 5px color-mix(in srgb,var(--sw-accent) 22%,transparent);}
   .sw-route__label{position:absolute;right:24px;top:50%;transform:translateY(-50%) translateX(6px);white-space:nowrap;font-size:.78rem;font-weight:600;color:var(--sw-ink);background:color-mix(in srgb,#fff 85%,transparent);backdrop-filter:blur(6px);padding:5px 11px;border-radius:999px;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;border:1px solid color-mix(in srgb,var(--sw-accent) 14%,transparent);}
   .sw-route__dot:hover .sw-route__label,.sw-route__dot.is-active .sw-route__label{opacity:1;transform:translateY(-50%) translateX(0);}
-  .sw-hint{position:fixed;left:50%;bottom:26px;z-index:30;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:10px;font-size:.76rem;letter-spacing:.14em;text-transform:uppercase;color:var(--sw-ink-soft);transition:opacity .3s;}
+  .sw-hint{position:absolute;left:50%;bottom:26px;z-index:30;transform:translateX(-50%);display:none;}
   .sw-hint i{width:22px;height:34px;border-radius:12px;border:2px solid color-mix(in srgb,var(--sw-ink) 28%,transparent);position:relative;}
   .sw-hint i::after{content:"";position:absolute;left:50%;top:7px;width:4px;height:7px;border-radius:2px;background:var(--sw-accent);transform:translateX(-50%);animation:sw-wheel 1.7s ease-in-out infinite;}
   @keyframes sw-wheel{0%{opacity:0;top:6px}40%{opacity:1}100%{opacity:0;top:17px}}
-  .sw-track{position:relative;z-index:1;width:100%;pointer-events:none;}
+  .sw-track{position:relative;z-index:0;width:100%;height:100%;pointer-events:none;}
   @media (max-width:860px){
     .sw-copylayer::before{width:100%;height:74%;top:auto;bottom:0;background:linear-gradient(0deg,var(--sw-bg) 8%,color-mix(in srgb,var(--sw-bg) 70%,transparent) 46%,transparent 100%);}
     .sw-copy{left:clamp(18px,5vw,64px);right:clamp(18px,5vw,64px);top:auto;bottom:clamp(64px,14vh,120px);transform:none;width:auto;max-width:560px;}
