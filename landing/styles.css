@@ -127,12 +127,17 @@ body::before {
   box-shadow:0 22px 50px -36px rgba(20,24,44,.55);
 }
 .hook-unmute {
-  position:absolute; left:12px; bottom:52px; z-index:2;
-  border:0; cursor:pointer;
-  font-family:var(--sans); font-weight:650; font-size:14px;
-  color:var(--accent-ink); background:var(--accent);
-  padding:10px 16px; border-radius:999px;
-  box-shadow:0 10px 24px -14px rgba(20,24,44,.7);
+  position:absolute; inset:0; z-index:3;
+  border:0; cursor:pointer; border-radius:14px;
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--sans); font-weight:700;
+  font-size:clamp(1.05rem,2.4vw,1.4rem);
+  color:#fff; background:rgba(12,14,22,.48);
+}
+.hook-unmute span {
+  background:var(--accent); color:var(--accent-ink);
+  padding:14px 22px; border-radius:999px;
+  box-shadow:0 12px 28px -16px rgba(20,24,44,.8);
 }
 .hook-unmute[hidden] { display:none; }
 @media (max-width:720px){ .nav-links{ display:none; } }
