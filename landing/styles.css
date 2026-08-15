@@ -409,6 +409,60 @@ body::before {
   border-radius:999px; padding:10px 16px;
 }
 
+/* ── inquiry modal ─────────────────────── */
+body.anfrage-open { overflow:hidden; }
+.anfrage-modal {
+  position:fixed; inset:0; z-index:80;
+  background:rgba(18,20,28,.46);
+  display:flex; align-items:flex-start; justify-content:center;
+  padding:clamp(18px,6vh,72px) 16px 32px;
+  overflow:auto;
+}
+.anfrage-modal[hidden] { display:none; }
+.anfrage-panel {
+  position:relative; width:min(560px,100%);
+  background:var(--surface); border:1px solid var(--line); border-radius:16px;
+  padding:28px 24px 26px;
+  box-shadow:0 30px 70px -28px rgba(20,24,44,.55);
+}
+.anfrage-x {
+  position:absolute; top:12px; right:12px;
+  width:36px; height:36px; border:0; border-radius:8px;
+  background:transparent; color:var(--muted); font-size:24px; cursor:pointer; line-height:1;
+}
+.anfrage-x:hover { color:var(--text); background:var(--surface-2); }
+.anfrage-panel h2 { font-size:clamp(1.4rem,3vw,1.85rem); letter-spacing:-.02em; margin-top:8px; }
+.anfrage-lead { margin-top:10px; color:var(--muted); font-size:15px; }
+.anfrage-grid { margin-top:22px; display:grid; gap:14px; }
+@media (min-width:560px){ .anfrage-grid-2{ grid-template-columns:1fr 1fr; } }
+.anfrage-field { display:flex; flex-direction:column; gap:6px; }
+.anfrage-field span { font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); }
+.anfrage-field input,
+.anfrage-field select,
+.anfrage-field textarea {
+  font:inherit; font-size:15px; color:var(--text);
+  background:var(--bg-2); border:1px solid var(--line); border-radius:10px;
+  padding:11px 12px; width:100%;
+}
+.anfrage-field textarea { min-height:88px; resize:vertical; }
+.anfrage-hp { position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }
+.anfrage-consent {
+  display:flex; gap:10px; align-items:flex-start;
+  font-size:13.5px; color:var(--muted); line-height:1.45;
+}
+.anfrage-consent input { margin-top:3px; }
+.anfrage-error { margin-top:12px; color:var(--warn); font-size:14px; }
+.anfrage-error[hidden] { display:none; }
+.anfrage-actions { margin-top:18px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+.anfrage-ok { text-align:center; padding:28px 8px 12px; }
+.anfrage-ok h2 { outline:none; }
+.anfrage-ok p { margin-top:12px; color:var(--muted); }
+.no-js .anfrage-modal {
+  position:static; background:none; padding:0 0 48px; display:block;
+}
+.no-js .anfrage-modal[hidden] { display:block; }
+.no-js .anfrage-x { display:none; }
+
 /* ── CLOSING CTA ───────────────────────── */
 .close {
   background:linear-gradient(180deg, var(--bg-2), var(--bg));

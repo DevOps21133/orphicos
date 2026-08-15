@@ -1,0 +1,18 @@
+[Unit]
+Description=OrphicOS inbound lead intake
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+Environment=ORPHICOS_ANFRAGE_DB=/var/lib/orphicos/leads.db
+Environment=ORPHICOS_ANFRAGE_TO=bloimlala@gmail.com
+Environment=ORPHICOS_ANFRAGE_FROM=anfrage@orphicos.app
+ExecStart=/usr/bin/python3 /opt/orphicos/anfrage.py
+Restart=on-failure
+RestartSec=2
+WorkingDirectory=/var/lib/orphicos
+
+[Install]
+WantedBy=multi-user.target

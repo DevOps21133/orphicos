@@ -46,7 +46,7 @@
           <span class="chip"><span class="dot"></span>Kein Warenkorb — ein Gespräch</span>
         </div>
         <p class="cta-row">
-          <a class="btn btn-primary" href="tel:+4915678383760">15-Minuten Erstgespräch anfragen <span class="arrow" aria-hidden="true">→</span></a>
+          <a class="btn btn-primary js-anfrage" href="#anfrage">15-Minuten Erstgespräch anfragen <span class="arrow" aria-hidden="true">→</span></a>
           <a class="btn btn-ghost" href="tel:+4915678383760">RUF DIREKT AN</a>
           <span class="phone-label">Telefon: 01567 8383760</span>
         </p>
@@ -160,7 +160,7 @@
       <h2>Noch immer Cloud-ChatGPT für Arbeit, die im Haus bleiben muss.</h2>
       <p>Wir richten private KI ein. Aufgaben automatisieren wir, wenn ihr das wollt.</p>
       <div class="actions">
-        <a class="btn btn-primary" href="tel:+4915678383760">15-Minuten Erstgespräch anfragen <span class="arrow" aria-hidden="true">→</span></a>
+        <a class="btn btn-primary js-anfrage" href="#anfrage">15-Minuten Erstgespräch anfragen <span class="arrow" aria-hidden="true">→</span></a>
         <a class="btn btn-ghost" href="tel:+4915678383760">RUF DIREKT AN</a>
         <span class="phone-label">Telefon: 01567 8383760</span>
       </div>
@@ -180,7 +180,72 @@
     </span>
   </footer>
 
+  <div class="anfrage-modal" id="anfrage-modal" hidden>
+    <div class="anfrage-panel" role="dialog" aria-modal="true" aria-labelledby="anfrage-title">
+      <button type="button" class="anfrage-x" data-anfrage-close aria-label="Schließen">×</button>
+      <div data-anfrage-formwrap>
+        <p class="eyebrow">15 Minuten</p>
+        <h2 id="anfrage-title">Erstgespräch anfragen</h2>
+        <p class="anfrage-lead">Name, Telefon, Unternehmen. Wir rufen Sie zurück. Kein Warenkorb.</p>
+        <form id="anfrage-form" action="/api/anfrage" method="post">
+          <div class="anfrage-hp" aria-hidden="true">
+            <label>Website<input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+          </div>
+          <div class="anfrage-grid anfrage-grid-2">
+            <label class="anfrage-field"><span>Name *</span><input name="name" required autocomplete="name"></label>
+            <label class="anfrage-field"><span>Telefon *</span><input name="phone" type="tel" required autocomplete="tel"></label>
+            <label class="anfrage-field"><span>E-Mail *</span><input name="email" type="email" required autocomplete="email"></label>
+            <label class="anfrage-field"><span>Unternehmen *</span><input name="company" required autocomplete="organization"></label>
+            <label class="anfrage-field"><span>Funktion</span><input name="role" autocomplete="organization-title"></label>
+            <label class="anfrage-field"><span>Branche</span>
+              <select name="industry">
+                <option value="">Bitte wählen</option>
+                <option>Kanzlei</option>
+                <option>Steuerberatung</option>
+                <option>Beratung</option>
+                <option>Ingenieurbüro</option>
+                <option>Software</option>
+                <option>Industrie</option>
+                <option>Gesundheit</option>
+                <option>Sonstiges</option>
+              </select>
+            </label>
+            <label class="anfrage-field"><span>Mitarbeiter</span>
+              <select name="employees">
+                <option value="">Bitte wählen</option>
+                <option>1–10</option>
+                <option>11–50</option>
+                <option>51–200</option>
+                <option>200+</option>
+              </select>
+            </label>
+          </div>
+          <label class="anfrage-field" style="margin-top:14px"><span>Worum geht es? (optional)</span>
+            <textarea name="message" placeholder="Lokale KI, Automatisierung, oder beides."></textarea>
+          </label>
+          <label class="anfrage-consent" style="margin-top:14px">
+            <input type="checkbox" name="consent" value="1" required>
+            <span>Ich willige ein, dass OrphicOS diese Angaben speichert und mich zum Erstgespräch kontaktiert. <a href="/de/datenschutz.html">Datenschutz</a></span>
+          </label>
+          <p class="anfrage-error" data-anfrage-error hidden></p>
+          <div class="anfrage-actions">
+            <button type="submit" class="btn btn-primary">Anfrage senden</button>
+            <button type="button" class="btn btn-ghost" data-anfrage-close>Abbrechen</button>
+          </div>
+        </form>
+      </div>
+      <div class="anfrage-ok" data-anfrage-ok hidden>
+        <h2 tabindex="-1">Wir werden Sie umgehend kontaktieren.</h2>
+        <p>Ihre Angaben sind angekommen. Wir rufen Sie in Kürze an.</p>
+        <div class="anfrage-actions" style="justify-content:center">
+          <button type="button" class="btn btn-primary" data-anfrage-close>Schließen</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 <script src="/assets/app.js" defer></script>
 <script src="/assets/hook-video.js?v=2" defer></script>
+<script src="/assets/anfrage.js" defer></script>
 </body>
 </html>

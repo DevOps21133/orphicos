@@ -45,7 +45,7 @@
         title: 'Nichts verlässt jemals das Gebäude.',
         body: 'Deine Verträge, Kundendaten und dein Quellcode bleiben auf deiner Festplatte. Leistung und Vertraulichkeit — ohne Kompromiss.',
         cta: {
-          primary: { label: '15-Minuten Erstgespräch', href: 'tel:+4915678383760' },
+          primary: { label: '15-Minuten Erstgespräch', href: '#anfrage' },
           secondary: { label: 'RUF DIREKT AN', href: 'tel:+4915678383760' }
         }
       }
