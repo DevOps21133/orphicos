@@ -16,7 +16,7 @@ product's own strategy docs (`E:\youtube raw ai\ROADMAP.md`, `PRODUCT-ANGLE.md`,
 
 The primary CTA everywhere is **Book an Enterprise Consultation** — a link to Telegram
 `t.me/OrphicOS`, never a checkout or a "Subscribe". The secondary CTA links to the
-YouTube Mission Logs (`UCAZ4UmGpCjGsuipjz5-AdOQ` on both EN and DE). Proof embed: `Z6-Rt8RjJ4k`.
+YouTube: EN `UCAZ4UmGpCjGsuipjz5-AdOQ` (embed `NsAulgrU1Eg`); DE `@OrphicOS-deutsch` (embed `Z6-Rt8RjJ4k`).
 
 The prior "voice desktop helper / museum-plate" design is retired. The unchosen variants
 (`b/` Terminal heritage, `c/` Type only) and the maritime hero artwork under `assets/` stay

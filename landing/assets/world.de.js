@@ -2,7 +2,7 @@
 (function () {
   var el = document.getElementById('world');
   if (!el || !window.mountScrollWorld) return;
-  var YT = 'https://www.youtube.com/channel/UCAZ4UmGpCjGsuipjz5-AdOQ';
+  var YT = 'https://www.youtube.com/@OrphicOS-deutsch';
   mountScrollWorld(el, {
     hint: 'Scrollen zum Einfliegen',
     diveScroll: 1.3,
