@@ -257,13 +257,14 @@ function mountScrollWorld(container, config) {
       if (k !== i && o.video) { try { o.video.pause(); } catch (e) {} }
     });
     try { s.video.currentTime = 0; } catch (e) {}
+    try { s.video.playbackRate = 1.6; } catch (e) {}
     const goNext = () => playSegment(i + 1);
     s.video.addEventListener('ended', goNext, { once: true });
     const p = s.video.play();
     if (p && p.catch) {
       p.catch(() => {
         // Permissions-Policy or autoplay block: time-scrub this clip instead.
-        const dur = (s.video.duration || 4) * 1000;
+        const dur = ((s.video.duration || 4) * 1000) / 1.6;
         const t0 = performance.now();
         (function scrub(now) {
           if (!autoplayOn) return;
