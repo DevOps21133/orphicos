@@ -120,11 +120,21 @@ body::before {
 }
 .nav-phone:hover { color:var(--accent-link); }
 .phone-label { font-size:14px; color:var(--muted); align-self:center; }
+.hook-wrap { position:relative; }
 .hook-video {
   display:block; width:100%; height:auto; border-radius:14px;
   background:#111; border:1px solid var(--line);
   box-shadow:0 22px 50px -36px rgba(20,24,44,.55);
 }
+.hook-unmute {
+  position:absolute; left:12px; bottom:52px; z-index:2;
+  border:0; cursor:pointer;
+  font-family:var(--sans); font-weight:650; font-size:14px;
+  color:var(--accent-ink); background:var(--accent);
+  padding:10px 16px; border-radius:999px;
+  box-shadow:0 10px 24px -14px rgba(20,24,44,.7);
+}
+.hook-unmute[hidden] { display:none; }
 @media (max-width:720px){ .nav-links{ display:none; } }
 
 /* ── shared button ─────────────────────── */

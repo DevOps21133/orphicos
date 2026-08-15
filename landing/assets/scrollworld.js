@@ -119,23 +119,18 @@ function mountScrollWorld(container, config) {
     if (reduce || s.loading || !s.clip) return;
     s.loading = true;
     const url = (isMobile() && s.clipM) ? s.clipM : s.clip;
-    fetch(url).then(r => r.ok ? r.blob() : Promise.reject(new Error('404')))
-      .then(blob => {
-        const v = document.createElement('video');
-        v.className = 'sw-scene__video';
-        v.muted = true; v.playsInline = true; v.preload = 'auto';
-        v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
-        v.src = URL.createObjectURL(blob);
-        v.addEventListener('loadedmetadata', () => { s.ready = true; read(); });
-        v.addEventListener('seeked', () => {
-          if (v.videoWidth > 0) s.el.classList.add('has-clip');
-        });
-        v.addEventListener('playing', () => { if (v.videoWidth > 0) s.el.classList.add('has-clip'); });
-        v.addEventListener('loadeddata', () => {
-          if (userReady) primeVideo(v);
-        });
-        s.el.appendChild(v); s.video = v; s.hasClip = true;
-      }).catch(() => { s.loading = false; });
+    const v = document.createElement('video');
+    v.className = 'sw-scene__video';
+    v.muted = true; v.defaultMuted = true; v.playsInline = true; v.preload = 'auto';
+    v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
+    v.src = url;
+    v.addEventListener('loadedmetadata', () => { s.ready = true; read(); });
+    v.addEventListener('seeked', () => {
+      if (v.videoWidth > 0) s.el.classList.add('has-clip');
+    });
+    v.addEventListener('playing', () => { if (v.videoWidth > 0) s.el.classList.add('has-clip'); });
+    v.addEventListener('canplay', () => { if (userReady) primeVideo(v); });
+    s.el.appendChild(v); s.video = v; s.hasClip = true;
   }
 
   function flightMs() {
@@ -258,6 +253,7 @@ function mountScrollWorld(container, config) {
     });
     try { s.video.currentTime = 0; } catch (e) {}
     try { s.video.playbackRate = 1.6; } catch (e) {}
+    s.video.muted = true; s.video.defaultMuted = true;
     const goNext = () => playSegment(i + 1);
     s.video.addEventListener('ended', goNext, { once: true });
     const p = s.video.play();
