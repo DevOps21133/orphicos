@@ -119,6 +119,7 @@ body::before {
   color:var(--text); text-decoration:none; padding:8px 4px; white-space:nowrap;
 }
 .nav-phone:hover { color:var(--accent-link); }
+.phone-label { font-size:14px; color:var(--muted); align-self:center; }
 .hook-video {
   display:block; width:100%; height:auto; border-radius:14px;
   background:#111; border:1px solid var(--line);
