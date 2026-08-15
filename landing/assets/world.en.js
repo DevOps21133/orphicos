@@ -13,28 +13,28 @@
         still: '/assets/world/scene1.webp',
         clip: '/assets/world/dive1.mp4', clipMobile: '/assets/world/dive1-m.mp4',
         scroll: 1.6, linger: 0.35,
-        eyebrow: 'OrphicOS · Enterprise Autonomous AI Employees',
-        title: 'An AI employee that does the work — on your machines, not the cloud.',
-        body: 'OrphicOS runs real business workflows end-to-end in your own apps. Scroll to fly through the world it works in.',
-        tags: ['100% local', 'Autonomous', 'Enterprise']
+        eyebrow: 'OrphicOS · Local AI for companies',
+        title: 'Local AI on your machines — not the cloud.',
+        body: 'We set up ChatGPT-like AI on your machines. Data stays in the building. We automate recurring tasks if you want that.',
+        tags: ['Local', 'No cloud', 'Automation optional']
       },
       {
         id: 'desk', label: 'Your desk', accent: '#d94f2b',
         still: '/assets/world/scene2.webp',
         clip: '/assets/world/dive2.mp4', clipMobile: '/assets/world/dive2-m.mp4',
-        eyebrow: 'Deployment',
-        title: 'It moves in where you already work.',
-        body: 'Deployed on your own infrastructure — your desktops, your servers, your apps. No SaaS tenant, no data pipeline to somebody else’s cloud.',
+        eyebrow: 'Install',
+        title: 'We set it up where you already work.',
+        body: 'On your infrastructure — desktops, servers, your apps. No cloud account, no data pipeline out of the building.',
         tags: ['Your hardware', 'Your apps']
       },
       {
         id: 'team', label: 'The team', accent: '#d94f2b',
         still: '/assets/world/scene3.webp',
         clip: '/assets/world/dive3.mp4', clipMobile: '/assets/world/dive3-m.mp4',
-        eyebrow: 'The team',
-        title: 'Six automation systems. One platform.',
-        body: 'Marketing · Research · Sales · Executive Assistant · YouTube · Customer Support — each one a configurable AI employee doing a department’s repetitive work.',
-        tags: ['Marketing', 'Research', 'Sales', 'Exec Assistant', 'YouTube', 'Support']
+        eyebrow: 'Optional',
+        title: 'Six departments. Automation only if you want it.',
+        body: 'Marketing, research, sales, assistant, YouTube, support — we automate the workflows you give us. Or we stop at local AI for daily work.',
+        tags: ['Marketing', 'Research', 'Sales', 'Assistant', 'YouTube', 'Support']
       },
       {
         id: 'guarantee', label: 'The guarantee', accent: '#d94f2b',

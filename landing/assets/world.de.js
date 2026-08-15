@@ -13,28 +13,28 @@
         still: '/assets/world/scene1.webp',
         clip: '/assets/world/dive1.mp4', clipMobile: '/assets/world/dive1-m.mp4',
         scroll: 1.6, linger: 0.35,
-        eyebrow: 'OrphicOS · Autonome KI-Mitarbeiter für Unternehmen',
-        title: 'Ein KI-Mitarbeiter, der die Arbeit erledigt — auf deinen Rechnern, nicht in der Cloud.',
-        body: 'OrphicOS führt echte Geschäftsabläufe von Anfang bis Ende in deinen eigenen Apps aus. Scroll und flieg durch die Welt, in der er arbeitet.',
-        tags: ['100 % lokal', 'Autonom', 'Enterprise']
+        eyebrow: 'OrphicOS · Lokale KI für Unternehmen',
+        title: 'Lokale KI auf deinen Rechnern — nicht in der Cloud.',
+        body: 'Wir richten ChatGPT-ähnliche KI bei dir ein. Daten bleiben im Haus. Wiederkehrende Aufgaben automatisieren wir, wenn du das willst.',
+        tags: ['Lokal', 'Keine Cloud', 'Automatisierung optional']
       },
       {
         id: 'schreibtisch', label: 'Dein Schreibtisch', accent: '#d94f2b',
         still: '/assets/world/scene2.webp',
         clip: '/assets/world/dive2.mp4', clipMobile: '/assets/world/dive2-m.mp4',
-        eyebrow: 'Einführung',
-        title: 'Er zieht dort ein, wo du schon arbeitest.',
-        body: 'Installiert auf deiner eigenen Infrastruktur — deine Desktops, deine Server, deine Apps. Kein SaaS-Mandant, keine Datenleitung in eine fremde Cloud.',
+        eyebrow: 'Installation',
+        title: 'Wir richten sie dort ein, wo du schon arbeitest.',
+        body: 'Auf deiner Infrastruktur — Desktops, Server, deine Apps. Kein Cloud-Konto, keine Datenleitung nach draußen.',
         tags: ['Deine Hardware', 'Deine Apps']
       },
       {
         id: 'team', label: 'Das Team', accent: '#d94f2b',
         still: '/assets/world/scene3.webp',
         clip: '/assets/world/dive3.mp4', clipMobile: '/assets/world/dive3-m.mp4',
-        eyebrow: 'Das Team',
-        title: 'Sechs Automation Systems. Eine Plattform.',
-        body: 'Marketing · Research · Sales · Executive Assistant · YouTube · Customer Support — jedes ein konfigurierbarer KI-Mitarbeiter, der die Routinearbeit einer Abteilung übernimmt.',
-        tags: ['Marketing', 'Research', 'Sales', 'Exec Assistant', 'YouTube', 'Support']
+        eyebrow: 'Optional',
+        title: 'Sechs Abteilungen. Automatisierung nur, wenn du willst.',
+        body: 'Marketing, Recherche, Vertrieb, Assistenz, YouTube, Support — wir automatisieren die Abläufe, die du uns gibst. Oder wir bleiben bei lokaler KI zum Arbeiten.',
+        tags: ['Marketing', 'Recherche', 'Vertrieb', 'Assistenz', 'YouTube', 'Support']
       },
       {
         id: 'garantie', label: 'Die Garantie', accent: '#d94f2b',
