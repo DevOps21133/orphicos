@@ -9,6 +9,9 @@ import re
 import sqlite3
 import subprocess
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs
@@ -168,6 +171,27 @@ def mail_bytes(row: dict, lead_id: int, ip: str) -> bytes:
     return msg.encode("utf-8")
 
 
+def notify_telegram(row: dict, lead_id: int) -> None:
+    token = os.environ.get("TG_BOT_TOKEN") or os.environ.get("VIDNO_TG_BOT_TOKEN")
+    chat = os.environ.get("TG_CHAT_ID") or os.environ.get("VIDNO_TG_CHAT_ID")
+    if not token or not chat:
+        return
+    text = (
+        f"Neue OrphicOS-Anfrage #{lead_id}\n"
+        f"{row['company']} — {row['name']}\n"
+        f"Tel: {row['phone']}\n"
+        f"Mail: {row['email']}\n"
+        f"Funktion: {row['role'] or '—'}\n"
+        f"Branche: {row['industry'] or '—'}\n"
+        f"Mitarbeiter: {row['employees'] or '—'}\n"
+        f"{row['message'] or ''}"
+    )
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    data = urllib.parse.urlencode({"chat_id": chat, "text": text[:3500]}).encode()
+    req = urllib.request.Request(url, data=data, method="POST")
+    urllib.request.urlopen(req, timeout=15).read()
+
+
 def notify(row: dict, lead_id: int, ip: str) -> None:
     raw = mail_bytes(row, lead_id, ip)
     outbox = os.path.join(os.path.dirname(DB_PATH), "outbox")
@@ -175,16 +199,23 @@ def notify(row: dict, lead_id: int, ip: str) -> None:
     path = os.path.join(outbox, f"lead-{lead_id}.eml")
     with open(path, "wb") as fh:
         fh.write(raw)
-    subprocess.run(
-        [SENDMAIL, "-t", "-oi", "-f", MAIL_FROM],
-        input=raw,
-        check=True,
-        timeout=20,
-    )
     try:
-        os.remove(path)
-    except OSError:
-        pass
+        subprocess.run(
+            [SENDMAIL, "-t", "-oi", "-f", MAIL_FROM],
+            input=raw,
+            check=True,
+            timeout=20,
+        )
+    except Exception as exc:
+        __import__("sys").stderr.write("mail failed lead %s: %s\n" % (lead_id, exc))
+    try:
+        notify_telegram(row, lead_id)
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+    except Exception as exc:
+        __import__("sys").stderr.write("telegram failed lead %s: %s\n" % (lead_id, exc))
 
 
 OK_HTML = """<!DOCTYPE html>
