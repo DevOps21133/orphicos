@@ -46,7 +46,7 @@
         body: 'Deine Verträge, Kundendaten und dein Quellcode bleiben auf deiner Festplatte. Leistung und Vertraulichkeit — ohne Kompromiss.',
         cta: {
           primary: { label: 'Enterprise-Beratung buchen', href: 'https://t.me/OrphicOS' },
-          secondary: { label: 'Sieh ihn arbeiten', href: YT, blank: true }
+          secondary: { label: '01567 8383760', href: 'tel:+4915678383760' }
         }
       }
     ],
