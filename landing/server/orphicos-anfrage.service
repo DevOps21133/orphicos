@@ -8,7 +8,7 @@ User=www-data
 Group=www-data
 Environment=ORPHICOS_ANFRAGE_DB=/var/lib/orphicos/leads.db
 Environment=ORPHICOS_ANFRAGE_TO=bloimlala@gmail.com
-Environment=ORPHICOS_ANFRAGE_FROM=anfrage@orphicos.app
+Environment=ORPHICOS_ANFRAGE_FROM=anfrage@sentinelbtc.com
 EnvironmentFile=-/opt/content-engine/.env
 ExecStart=/usr/bin/python3 /opt/orphicos/anfrage.py
 Restart=on-failure
