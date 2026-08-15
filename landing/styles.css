@@ -277,6 +277,17 @@ body::before {
 }
 .yt-wrap iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
 .yt-note { margin-top:10px; font-size:13px; color:var(--faint); }
+.yt-start {
+  position:absolute; inset:0; width:100%; height:100%; border:0; padding:0;
+  cursor:pointer; background:#111; color:#fff;
+}
+.yt-start img { width:100%; height:100%; object-fit:cover; display:block; filter:brightness(.72); }
+.yt-start span {
+  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  font-family:var(--sans); font-weight:650; font-size:1.05rem;
+  background:var(--accent); color:var(--accent-ink);
+  padding:14px 22px; border-radius:999px; white-space:nowrap;
+}
 
 /* ── AUTOMATION SYSTEMS ────────────────── */
 .systems { display:grid; grid-template-columns:1fr; gap:16px; }
